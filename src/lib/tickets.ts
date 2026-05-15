@@ -45,19 +45,26 @@ export async function createTicket({
   // Hard overrides
   const lowerDesc = description.toLowerCase()
   const lowerTitle = title.toLowerCase()
-  if ((lowerDesc.includes('no power') || lowerTitle.includes('no power') ||
-       lowerDesc.includes('power cut') || lowerTitle.includes('power cut')) &&
-      location.toLowerCase().includes('hostel') && timeOfDay === 'night') {
-    priorityScore = 100
-  }
-  if (lowerDesc.includes('medical emergency') || lowerTitle.includes('medical emergency')) {
-    priorityScore = 100
-  }
+  // Critical hard overrides
+  const powerKeywords = ['no power', 'power cut', 'no electricity', 'blackout', 'lights out', 'power failure']
+  const medicalKeywords = ['medical emergency', 'accident', 'injured', 'unconscious', 'bleeding', 'heart', 'hospital']
+  const hasPowerIssue = powerKeywords.some(k => lowerDesc.includes(k) || lowerTitle.includes(k))
+  const hasMedical = medicalKeywords.some(k => lowerDesc.includes(k) || lowerTitle.includes(k))
+  const isHostel = location.toLowerCase().includes('hostel') || lowerDesc.includes('hostel') || lowerTitle.includes('hostel')
+
+  if (hasPowerIssue && isHostel && timeOfDay === 'night') priorityScore = 100
+  if (hasPowerIssue && isHostel) priorityScore = Math.max(priorityScore, 70)
+  if (hasMedical) priorityScore = 100
+
+  // High priority keywords
+  const highKeywords = ['not working', 'broken', 'urgent', 'immediately', 'exam tomorrow', 'cannot access', 'blocked']
+  const hasHighKeyword = highKeywords.some(k => lowerDesc.includes(k) || lowerTitle.includes(k))
+  if (hasHighKeyword) priorityScore = Math.max(priorityScore, 28)
 
   // Priority label
-  const priorityLabel = priorityScore >= 80 ? 'critical'
-    : priorityScore >= 50 ? 'high'
-    : priorityScore >= 25 ? 'medium' : 'low'
+  const priorityLabel = priorityScore >= 60 ? 'critical'
+    : priorityScore >= 30 ? 'high'
+    : priorityScore >= 12 ? 'medium' : 'low'
 
   // SLA deadline
   const slaHours = category?.default_sla_hours || 24

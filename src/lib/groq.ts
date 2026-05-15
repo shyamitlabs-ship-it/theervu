@@ -15,26 +15,27 @@ export async function classifyTicket(title: string, description: string, locatio
         messages: [
           {
             role: 'system',
-            content: `You are a ticket classification system for KCT (Kumaraguru College of Technology) helpdesk called Theervu.
-            
-Classify support tickets into exactly one of these categories: ${categories.join(', ')}.
+            content: `You are a ticket classification system for KCT (Kumaraguru College of Technology) helpdesk.
 
-Also assess priority based on content:
-- critical: medical emergency, no power at night, safety issues
-- high: exam-related issues, hostel infrastructure, network down
-- medium: academic queries, transport issues, general complaints  
-- low: library, canteen, minor inconveniences
+Your ONLY job is to classify which department should handle this ticket.
+Choose exactly one from: ${categories.join(', ')}
 
-Respond ONLY with valid JSON in this exact format:
+Rules:
+- Hostel: anything about rooms, dormitories, hostel blocks, power, water, hostel facilities
+- IT & Network: wifi, internet, computers, printers, projectors, software, network
+- Academics: attendance, marks, exams, lab records, faculty, timetable, hall tickets
+- Transport: bus, van, routes, driver, college transport
+- Canteen: food, mess, menu, mess card, dining
+- Medical: health, sick, hospital, medicine, injury, doctor
+- Library: books, library card, reading room, journals
+
+Respond ONLY with valid JSON, nothing else:
 {
-  "category": "category name here",
+  "category": "exact category name from the list",
   "confidence": 0.95,
-  "priority": "high",
-  "reasoning": "brief one line reason",
+  "reasoning": "one line reason",
   "is_flagged": false
-}
-
-If the ticket doesn't fit any category well, set is_flagged to true and confidence below 0.5.`
+}`
           },
           {
             role: 'user',
@@ -42,11 +43,11 @@ If the ticket doesn't fit any category well, set is_flagged to true and confiden
 Description: ${description}
 Location: ${location}
 
-Classify this ticket.`
+Which department handles this?`
           }
         ],
-        temperature: 0.1,
-        max_tokens: 200,
+        temperature: 0.0,
+        max_tokens: 150,
       })
     })
 
@@ -55,11 +56,13 @@ Classify this ticket.`
 
     if (!content) throw new Error('No response from Groq')
 
-    const parsed = JSON.parse(content)
+    // Strip any markdown if present
+    const clean = content.replace(/```json|```/g, '').trim()
+    const parsed = JSON.parse(clean)
+
     return {
       category: parsed.category,
       confidence: parsed.confidence,
-      priority: parsed.priority,
       reasoning: parsed.reasoning,
       is_flagged: parsed.is_flagged || parsed.confidence < 0.5,
     }
@@ -68,7 +71,6 @@ Classify this ticket.`
     return {
       category: null,
       confidence: 0,
-      priority: 'medium',
       reasoning: 'Classification failed',
       is_flagged: true,
     }
