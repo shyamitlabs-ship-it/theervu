@@ -49,8 +49,8 @@ export default function TicketDetail() {
           table: 'tickets',
           filter: `id=eq.${id}`
         }, (payload) => {
+          console.log('Ticket updated:', payload.new.status)
           setTicket((prev: any) => ({ ...prev, ...payload.new }))
-          // Show notification when status changes
           const newStatus = payload.new.status
           const statusMessages: Record<string, string> = {
             in_progress: 'Your ticket is being worked on',
@@ -58,6 +58,7 @@ export default function TicketDetail() {
             awaiting_student: 'Staff needs more info from you',
           }
           if (statusMessages[newStatus]) {
+            console.log('Showing notification:', statusMessages[newStatus])
             showLocalNotification('Theervu Update', statusMessages[newStatus])
           }
         })
