@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { motion } from 'framer-motion'
 import { useNavigate, useParams } from 'react-router-dom'
+import { supabase } from '../../lib/supabase'
 import {
   ArrowLeft, CheckCircle2, Clock, Loader2, AlertCircle,
   MessageCircle, Send, User, Headset
