@@ -21,7 +21,7 @@ const categories = [
   { id: 'library', label: 'Library', icon: Library, gradient: 'from-indigo-500 to-blue-400', light: 'bg-indigo-50 border-indigo-200' },
 ]
 
-const locations = ['Hostel Block A', 'Hostel Block B', 'Hostel Block C', 'Main Block', 'CSE Block', 'IT Block', 'Library', 'Canteen', 'Sports Block']
+const locations = ['Hostel Block A', 'Hostel Block B', 'Hostel Block C', 'Hostel Block D', 'Main Block', 'CSE Block', 'IT Block', 'ECE Block', 'Mechanical Block', 'Library', 'Canteen', 'Sports Block', 'Seminar Hall', 'Principal Office', 'Other']
 
 const similarTickets = [
   { id: 's1', title: 'WiFi down in Block C — Room 301', resolvedIn: '2h', solution: 'Router was reset by IT team. Fixed.' },
@@ -62,11 +62,14 @@ export default function RaiseTicket() {
 
     // Run Groq classification
     const classification = await classifyTicket(title, description, location || 'Campus')
-    console.log('Groq classification:', classification)
 
-    // Find category — use AI suggestion if no manual selection, otherwise use manual
+    // If AI is confident (>75%), use AI category. Otherwise use student's selection.
+    const finalCategoryName = classification.confidence > 0.75
+      ? classification.category
+      : selectedCat?.label
+
     const matchedCat = cats?.find((c: any) =>
-      c.name.toLowerCase() === (selectedCat?.label || classification.category || '').toLowerCase()
+      c.name.toLowerCase() === (finalCategoryName || '').toLowerCase()
     )
 
     await createTicket({
@@ -245,20 +248,37 @@ export default function RaiseTicket() {
                     <MapPin size={11} className="inline mr-1" />Location
                   </label>
                   <div className="flex flex-wrap gap-2">
-                    {locations.map(loc => (
-                      <button
-                        key={loc}
-                        onClick={() => setLocation(loc)}
-                        className={`text-xs px-3 py-1.5 rounded-xl border font-medium transition-all ${
-                          location === loc
-                            ? 'bg-blue-500 text-white border-blue-500'
-                            : 'bg-white text-gray-600 border-gray-200 hover:border-blue-300'
-                        }`}
-                      >
-                        {loc}
-                      </button>
-                    ))}
-                  </div>
+                  {locations.map(loc => (
+                    <button
+                      key={loc}
+                      onClick={() => {
+                        setLocation(loc === 'Other' ? '' : loc)
+                        if (loc === 'Other') setLocation('other')
+                      }}
+                      className={`text-xs px-3 py-1.5 rounded-xl border font-medium transition-all ${
+                        (loc === 'Other' && location === 'other') || location === loc
+                          ? 'bg-blue-500 text-white border-blue-500'
+                          : 'bg-white text-gray-600 border-gray-200 hover:border-blue-300'
+                      }`}
+                    >
+                      {loc}
+                    </button>
+                  ))}
+                </div>
+
+                {location === 'other' && (
+                  <motion.div
+                    initial={{ opacity: 0, height: 0 }}
+                    animate={{ opacity: 1, height: 'auto' }}
+                    className="mt-2"
+                  >
+                    <input
+                      placeholder="Describe your location (e.g. Room 204, Lab 3B...)"
+                      onChange={e => setLocation(e.target.value)}
+                      className="w-full bg-white border border-blue-300 rounded-2xl px-4 py-3 text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:border-blue-400 transition-all"
+                    />
+                  </motion.div>
+                )}
                 </div>
 
                 <div>
