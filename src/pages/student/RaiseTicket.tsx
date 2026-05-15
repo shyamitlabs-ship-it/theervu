@@ -4,6 +4,7 @@ import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../../lib/AuthContext'
 import { createTicket } from '../../lib/tickets'
 import { supabase } from '../../lib/supabase'
+import { classifyTicket } from '../../lib/groq'
 import {
   ArrowLeft, Wifi, Zap, BookOpen, Bus, UtensilsCrossed,
   Stethoscope, Library, MapPin, Paperclip, Send,
@@ -57,10 +58,15 @@ export default function RaiseTicket() {
     if (!user) return
     setSubmitted(true)
 
-    // Find category ID from Supabase
     const { data: cats } = await supabase.from('categories').select('*')
+
+    // Run Groq classification
+    const classification = await classifyTicket(title, description, location || 'Campus')
+    console.log('Groq classification:', classification)
+
+    // Find category — use AI suggestion if no manual selection, otherwise use manual
     const matchedCat = cats?.find((c: any) =>
-      c.name.toLowerCase() === selectedCat?.label.toLowerCase()
+      c.name.toLowerCase() === (selectedCat?.label || classification.category || '').toLowerCase()
     )
 
     await createTicket({
