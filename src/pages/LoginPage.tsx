@@ -75,8 +75,15 @@ export default function LoginPage() {
       >
         <div className="backdrop-blur-2xl bg-white/5 border border-white/10 rounded-3xl p-8 shadow-2xl">
           <div className="text-center mb-8">
-            <h1 className="text-4xl font-bold text-white tracking-tight">थीर्वु</h1>
-            <p className="text-white/40 text-sm mt-1 tracking-widest uppercase">Theervu · KCT Help Desk</p>
+            <h1 className="text-5xl font-bold tracking-tight" style={{
+              background: 'linear-gradient(135deg, #60A5FA 0%, #06B6D4 100%)',
+              WebkitBackgroundClip: 'text',
+              WebkitTextFillColor: 'transparent',
+              backgroundClip: 'text',
+            }}>
+              தீர்வு
+            </h1>
+            <p className="text-white/40 text-xs mt-2 tracking-widest uppercase">Theervu · KCT Help Desk</p>
           </div>
 
           <div className="grid grid-cols-3 gap-2 mb-6">

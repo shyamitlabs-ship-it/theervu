@@ -90,10 +90,12 @@ export default function AdminDashboard() {
       {/* Dark Header */}
       <div className="bg-[#0a0a0a] sticky top-0 z-40">
         <div className="max-w-3xl mx-auto px-5 py-4 flex items-center justify-between">
-          <div>
-            <p className="text-white/40 text-xs font-medium">Admin Portal</p>
-            <h1 className="text-white text-lg font-bold">Operations Centre</h1>
-          </div>
+          <span className="text-xl font-bold" style={{
+            background: 'linear-gradient(135deg, #60A5FA 0%, #06B6D4 100%)',
+            WebkitBackgroundClip: 'text',
+            WebkitTextFillColor: 'transparent',
+            backgroundClip: 'text',
+          }}>தீர்வு</span>
           <div className="flex items-center gap-3">
             <motion.button whileTap={{ scale: 0.93 }} className="relative w-10 h-10 rounded-2xl bg-white/10 flex items-center justify-center">
               <Bell size={18} className="text-white" />

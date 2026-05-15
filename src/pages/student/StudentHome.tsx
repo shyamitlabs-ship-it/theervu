@@ -84,10 +84,12 @@ export default function StudentHome() {
       {/* Header */}
       <div className="bg-white/80 backdrop-blur-xl border-b border-gray-100 sticky top-0 z-40">
         <div className="max-w-2xl mx-auto px-5 py-4 flex items-center justify-between">
-          <div>
-            <p className="text-xs text-gray-400 font-medium">{greeting} 👋</p>
-            <h1 className="text-lg font-bold text-gray-900">{user?.name || 'Student'}</h1>
-          </div>
+          <span className="text-xl font-bold" style={{
+            background: 'linear-gradient(135deg, #3B82F6 0%, #06B6D4 100%)',
+            WebkitBackgroundClip: 'text',
+            WebkitTextFillColor: 'transparent',
+            backgroundClip: 'text',
+          }}>தீர்வு</span>
           <div className="flex items-center gap-3">
             <motion.button whileTap={{ scale: 0.93 }} className="relative w-10 h-10 rounded-2xl bg-gray-100 flex items-center justify-center">
               <Bell size={18} className="text-gray-600" />
