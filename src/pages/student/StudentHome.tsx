@@ -7,6 +7,7 @@ import {
   AlertCircle, Loader2, TrendingUp
 } from 'lucide-react'
 import { useAuth } from '../../lib/AuthContext'
+import { requestNotificationPermission, showLocalNotification } from '../../lib/notifications'
 import { getStudentTickets } from '../../lib/tickets'
 
 const categories = [
@@ -55,7 +56,15 @@ export default function StudentHome() {
   const greeting = hour < 12 ? 'Good morning' : hour < 17 ? 'Good afternoon' : 'Good evening'
 
   useEffect(() => {
-    if (user) loadTickets()
+    if (user) {
+      loadTickets()
+      // Request push notification permission
+      if (Notification.permission === 'default') {
+        setTimeout(() => {
+          requestNotificationPermission(user.id)
+        }, 3000)
+      }
+    }
   }, [user])
 
   const loadTickets = async () => {

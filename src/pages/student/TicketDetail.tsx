@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { motion } from 'framer-motion'
 import { useNavigate, useParams } from 'react-router-dom'
 import { supabase } from '../../lib/supabase'
+import { showLocalNotification } from '../../lib/notifications'
 import {
   ArrowLeft, CheckCircle2, Clock, Loader2, AlertCircle,
   MessageCircle, Send, User, Headset
@@ -49,6 +50,16 @@ export default function TicketDetail() {
           filter: `id=eq.${id}`
         }, (payload) => {
           setTicket((prev: any) => ({ ...prev, ...payload.new }))
+          // Show notification when status changes
+          const newStatus = payload.new.status
+          const statusMessages: Record<string, string> = {
+            in_progress: 'Your ticket is being worked on',
+            resolved: 'Your ticket has been resolved! ✅',
+            awaiting_student: 'Staff needs more info from you',
+          }
+          if (statusMessages[newStatus]) {
+            showLocalNotification('Theervu Update', statusMessages[newStatus])
+          }
         })
         .on('postgres_changes', {
           event: 'INSERT',
