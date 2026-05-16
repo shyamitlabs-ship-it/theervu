@@ -7,6 +7,10 @@ import {
   Wifi, Zap, BookOpen, Bus, UtensilsCrossed, Stethoscope,
   Library, Bell, BarChart3, ArrowRight
 } from 'lucide-react'
+import {
+  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
+  PieChart, Pie, Cell, LineChart, Line, Legend
+} from 'recharts'
 import { useAuth } from '../../lib/AuthContext'
 import { supabase } from '../../lib/supabase'
 
@@ -25,34 +29,39 @@ const categoryGradients: Record<string, string> = {
   'Library': 'from-indigo-500 to-blue-400',
 }
 
-const recentEvents = [
-  { title: 'End Semester Exam', type: 'exam', date: 'May 15–22', multiplier: '2.0x', color: 'bg-red-500' },
-  { title: 'College Day', type: 'event', date: 'May 25', multiplier: '1.3x', color: 'bg-violet-500' },
-  { title: 'Summer Holiday', type: 'holiday', date: 'Jun 1–30', multiplier: '0.7x', color: 'bg-green-500' },
-]
+const categoryColors: Record<string, string> = {
+  'IT & Network': '#3B82F6',
+  'Hostel': '#F97316',
+  'Academics': '#8B5CF6',
+  'Transport': '#10B981',
+  'Canteen': '#EC4899',
+  'Medical': '#EF4444',
+  'Library': '#6366F1',
+}
 
-const hostelHeatmap = [
-  { block: 'Block A', tickets: 8, color: 'bg-red-500', pct: 80 },
-  { block: 'Block B', tickets: 5, color: 'bg-amber-400', pct: 50 },
-  { block: 'Block C', tickets: 9, color: 'bg-red-600', pct: 90 },
-  { block: 'Block D', tickets: 2, color: 'bg-green-400', pct: 20 },
-]
+const PRIORITY_COLORS = {
+  critical: '#EF4444',
+  high: '#F97316',
+  medium: '#F59E0B',
+  low: '#10B981',
+}
 
 export default function AdminDashboard() {
   const navigate = useNavigate()
   const { user, signOut } = useAuth()
-  const [stats, setStats] = useState({ open: 0, resolvedToday: 0, slaBreaches: 0 })
+  const [stats, setStats] = useState({ open: 0, resolvedToday: 0, slaBreaches: 0, total: 0 })
   const [flaggedTickets, setFlaggedTickets] = useState<any[]>([])
   const [categoryStats, setCategoryStats] = useState<any[]>([])
+  const [priorityStats, setPriorityStats] = useState<any[]>([])
+  const [dailyStats, setDailyStats] = useState<any[]>([])
+  const [hostelStats, setHostelStats] = useState<any[]>([])
 
-  useEffect(() => {
-    loadStats()
-  }, [])
+  useEffect(() => { loadStats() }, [])
 
   const loadStats = async () => {
     const { data: tickets } = await supabase
       .from('tickets')
-      .select('id, status, priority_label, is_flagged, created_at, resolved_at, categories(name)')
+      .select('id, status, priority_label, is_flagged, created_at, resolved_at, location, categories(name)')
 
     if (!tickets) return
 
@@ -63,26 +72,82 @@ export default function AdminDashboard() {
       return new Date(t.resolved_at).toDateString() === new Date().toDateString()
     }).length
 
+    // Category breakdown
     const catMap: Record<string, number> = {}
     tickets.forEach(t => {
       const cat = (t.categories as any)?.name || 'Other'
       catMap[cat] = (catMap[cat] || 0) + 1
     })
     const catArray = Object.entries(catMap)
-      .map(([label, count]) => ({ label, count, pct: Math.round((count / tickets.length) * 100) }))
+      .map(([name, count]) => ({ name, count, pct: Math.round((count / tickets.length) * 100) }))
       .sort((a, b) => b.count - a.count)
 
-    setStats({ open, resolvedToday, slaBreaches: 0 })
+    // Priority breakdown
+    const priMap: Record<string, number> = { critical: 0, high: 0, medium: 0, low: 0 }
+    tickets.forEach(t => { if (t.priority_label) priMap[t.priority_label] = (priMap[t.priority_label] || 0) + 1 })
+    const priArray = Object.entries(priMap).map(([name, value]) => ({ name, value }))
+
+    // Daily tickets for last 7 days
+    const days: any[] = []
+    for (let i = 6; i >= 0; i--) {
+      const date = new Date()
+      date.setDate(date.getDate() - i)
+      const dateStr = date.toDateString()
+      const count = tickets.filter(t => new Date(t.created_at).toDateString() === dateStr).length
+      const resolved = tickets.filter(t => t.resolved_at && new Date(t.resolved_at).toDateString() === dateStr).length
+      days.push({
+        day: date.toLocaleDateString('en-US', { weekday: 'short' }),
+        raised: count,
+        resolved,
+      })
+    }
+
+    // Hostel heatmap
+    const hostelMap: Record<string, number> = {}
+    tickets.forEach(t => {
+      if (t.location?.includes('Hostel')) {
+        const block = t.location
+        hostelMap[block] = (hostelMap[block] || 0) + 1
+      }
+    })
+    const hostelArray = Object.entries(hostelMap)
+      .map(([block, tickets]) => ({ block, tickets }))
+      .sort((a, b) => b.tickets - a.tickets)
+
+    setStats({ open, resolvedToday, slaBreaches: 0, total: tickets.length })
     setFlaggedTickets(flagged)
     setCategoryStats(catArray)
+    setPriorityStats(priArray)
+    setDailyStats(days)
+    setHostelStats(hostelArray.length > 0 ? hostelArray : [
+      { block: 'Block A', tickets: 0 },
+      { block: 'Block B', tickets: 0 },
+      { block: 'Block C', tickets: 0 },
+    ])
   }
 
   const kpis = [
     { label: 'Open Tickets', value: String(stats.open), change: 'live', up: true, icon: TicketIcon, gradient: 'from-blue-500 to-cyan-400', bg: 'from-blue-50 to-cyan-50' },
-    { label: 'Avg Resolution', value: '3.2h', change: 'estimated', up: false, icon: Clock, gradient: 'from-green-500 to-emerald-400', bg: 'from-green-50 to-emerald-50' },
+    { label: 'Total Tickets', value: String(stats.total), change: 'all time', up: true, icon: BarChart3, gradient: 'from-violet-500 to-purple-400', bg: 'from-violet-50 to-purple-50' },
     { label: 'SLA Breaches', value: String(stats.slaBreaches), change: 'live', up: false, icon: AlertTriangle, gradient: 'from-red-500 to-rose-400', bg: 'from-red-50 to-rose-50' },
-    { label: 'Resolved Today', value: String(stats.resolvedToday), change: 'live', up: true, icon: CheckCircle2, gradient: 'from-violet-500 to-purple-400', bg: 'from-violet-50 to-purple-50' },
+    { label: 'Resolved Today', value: String(stats.resolvedToday), change: 'live', up: true, icon: CheckCircle2, gradient: 'from-green-500 to-emerald-400', bg: 'from-green-50 to-emerald-50' },
   ]
+
+  const CustomTooltip = ({ active, payload, label }: any) => {
+    if (active && payload && payload.length) {
+      return (
+        <div className="bg-white border border-gray-100 rounded-2xl p-3 shadow-lg">
+          <p className="text-xs font-bold text-gray-700 mb-1">{label}</p>
+          {payload.map((p: any) => (
+            <p key={p.name} className="text-xs" style={{ color: p.color }}>
+              {p.name}: {p.value}
+            </p>
+          ))}
+        </div>
+      )
+    }
+    return null
+  }
 
   return (
     <div className="min-h-screen bg-[#f5f5f7]">
@@ -163,11 +228,118 @@ export default function AdminDashboard() {
           })}
         </div>
 
+        {/* Daily Tickets Chart */}
+        <motion.div
+          initial={{ opacity: 0, y: 16 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.1 }}
+          className="bg-white rounded-3xl border border-gray-100 shadow-sm p-5 mb-4"
+        >
+          <div className="flex items-center gap-2 mb-4">
+            <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-blue-500 to-cyan-400 flex items-center justify-center">
+              <TrendingUp size={15} className="text-white" />
+            </div>
+            <p className="text-sm font-bold text-gray-900">Tickets This Week</p>
+          </div>
+          <ResponsiveContainer width="100%" height={180}>
+            <LineChart data={dailyStats}>
+              <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
+              <XAxis dataKey="day" tick={{ fontSize: 11, fill: '#9CA3AF' }} axisLine={false} tickLine={false} />
+              <YAxis tick={{ fontSize: 11, fill: '#9CA3AF' }} axisLine={false} tickLine={false} />
+              <Tooltip content={<CustomTooltip />} />
+              <Legend wrapperStyle={{ fontSize: '11px' }} />
+              <Line type="monotone" dataKey="raised" stroke="#3B82F6" strokeWidth={2.5} dot={{ fill: '#3B82F6', r: 4 }} name="Raised" />
+              <Line type="monotone" dataKey="resolved" stroke="#10B981" strokeWidth={2.5} dot={{ fill: '#10B981', r: 4 }} name="Resolved" />
+            </LineChart>
+          </ResponsiveContainer>
+        </motion.div>
+
+        {/* Category + Priority Charts side by side */}
+        <div className="grid grid-cols-2 gap-4 mb-4">
+
+          {/* Category Bar Chart */}
+          <motion.div
+            initial={{ opacity: 0, y: 16 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.2 }}
+            className="bg-white rounded-3xl border border-gray-100 shadow-sm p-5"
+          >
+            <div className="flex items-center gap-2 mb-4">
+              <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-violet-500 to-purple-400 flex items-center justify-center">
+                <BarChart3 size={15} className="text-white" />
+              </div>
+              <p className="text-xs font-bold text-gray-900">By Category</p>
+            </div>
+            {categoryStats.length === 0 ? (
+              <p className="text-xs text-gray-400 text-center py-8">No data yet</p>
+            ) : (
+              <ResponsiveContainer width="100%" height={160}>
+                <BarChart data={categoryStats} layout="vertical">
+                  <XAxis type="number" tick={{ fontSize: 10, fill: '#9CA3AF' }} axisLine={false} tickLine={false} />
+                  <YAxis type="category" dataKey="name" tick={{ fontSize: 9, fill: '#6B7280' }} axisLine={false} tickLine={false} width={65} />
+                  <Tooltip content={<CustomTooltip />} />
+                  <Bar dataKey="count" radius={[0, 4, 4, 0]} name="Tickets">
+                    {categoryStats.map((entry, index) => (
+                      <Cell key={index} fill={categoryColors[entry.name] || '#6B7280'} />
+                    ))}
+                  </Bar>
+                </BarChart>
+              </ResponsiveContainer>
+            )}
+          </motion.div>
+
+          {/* Priority Pie Chart */}
+          <motion.div
+            initial={{ opacity: 0, y: 16 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.25 }}
+            className="bg-white rounded-3xl border border-gray-100 shadow-sm p-5"
+          >
+            <div className="flex items-center gap-2 mb-4">
+              <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-red-500 to-rose-400 flex items-center justify-center">
+                <AlertTriangle size={15} className="text-white" />
+              </div>
+              <p className="text-xs font-bold text-gray-900">By Priority</p>
+            </div>
+            {priorityStats.every(p => p.value === 0) ? (
+              <p className="text-xs text-gray-400 text-center py-8">No data yet</p>
+            ) : (
+              <>
+                <ResponsiveContainer width="100%" height={120}>
+                  <PieChart>
+                    <Pie
+                      data={priorityStats.filter(p => p.value > 0)}
+                      cx="50%"
+                      cy="50%"
+                      innerRadius={35}
+                      outerRadius={55}
+                      dataKey="value"
+                    >
+                      {priorityStats.map((entry, index) => (
+                        <Cell key={index} fill={PRIORITY_COLORS[entry.name as keyof typeof PRIORITY_COLORS] || '#6B7280'} />
+                      ))}
+                    </Pie>
+                    <Tooltip content={<CustomTooltip />} />
+                  </PieChart>
+                </ResponsiveContainer>
+                <div className="grid grid-cols-2 gap-1 mt-2">
+                  {priorityStats.filter(p => p.value > 0).map(p => (
+                    <div key={p.name} className="flex items-center gap-1.5">
+                      <div className="w-2 h-2 rounded-full flex-shrink-0" style={{ background: PRIORITY_COLORS[p.name as keyof typeof PRIORITY_COLORS] }} />
+                      <span className="text-[9px] text-gray-500 capitalize">{p.name} ({p.value})</span>
+                    </div>
+                  ))}
+                </div>
+              </>
+            )}
+          </motion.div>
+        </div>
+
         {/* Flagged Tickets */}
         <motion.div
           initial={{ opacity: 0, y: 16 }}
           animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.2 }}
+          transition={{ delay: 0.3 }}
           className="bg-white rounded-3xl border border-gray-100 shadow-sm p-5 mb-4"
         >
           <div className="flex items-center justify-between mb-4">
@@ -195,63 +367,17 @@ export default function AdminDashboard() {
                 <div key={t.id} className="bg-amber-50 border border-amber-100 rounded-2xl p-4">
                   <div className="flex items-start justify-between mb-2">
                     <p className="text-xs font-bold text-gray-900">{t.title}</p>
-                    <span className="text-[10px] font-bold text-amber-600 bg-amber-100 px-2 py-1 rounded-lg">
-                      {Math.round((t.ai_confidence_score || 0) * 100)}% match
+                    <span className="text-[10px] font-bold text-amber-600 bg-amber-100 px-2 py-1 rounded-lg flex-shrink-0 ml-2">
+                      Flagged
                     </span>
                   </div>
-                  <p className="text-[10px] text-gray-400 mb-2">{t.ticket_number} · {t.ai_suggested_category || 'Uncategorized'}</p>
+                  <p className="text-[10px] text-gray-400 mb-2">{t.ticket_number}</p>
                   <div className="flex gap-2">
                     <button className="text-[10px] font-semibold text-white bg-blue-500 px-3 py-1.5 rounded-xl">Assign</button>
                     <button className="text-[10px] font-semibold text-gray-600 bg-gray-100 px-3 py-1.5 rounded-xl">Review</button>
                   </div>
                 </div>
               ))}
-            </div>
-          )}
-        </motion.div>
-
-        {/* Tickets by Category */}
-        <motion.div
-          initial={{ opacity: 0, y: 16 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.3 }}
-          className="bg-white rounded-3xl border border-gray-100 shadow-sm p-5 mb-4"
-        >
-          <div className="flex items-center gap-2 mb-4">
-            <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-blue-500 to-cyan-400 flex items-center justify-center">
-              <BarChart3 size={15} className="text-white" />
-            </div>
-            <p className="text-sm font-bold text-gray-900">Tickets by Category</p>
-          </div>
-          {categoryStats.length === 0 ? (
-            <p className="text-xs text-gray-400 text-center py-4">No ticket data yet</p>
-          ) : (
-            <div className="space-y-3">
-              {categoryStats.map((cat) => {
-                const Icon = categoryIcons[cat.label] || BarChart3
-                const gradient = categoryGradients[cat.label] || 'from-gray-400 to-gray-500'
-                return (
-                  <div key={cat.label} className="flex items-center gap-3">
-                    <div className={`w-8 h-8 rounded-xl bg-gradient-to-br ${gradient} flex items-center justify-center flex-shrink-0`}>
-                      <Icon size={14} className="text-white" />
-                    </div>
-                    <div className="flex-1">
-                      <div className="flex justify-between mb-1">
-                        <span className="text-xs font-semibold text-gray-700">{cat.label}</span>
-                        <span className="text-xs font-bold text-gray-900">{cat.count}</span>
-                      </div>
-                      <div className="h-1.5 bg-gray-100 rounded-full overflow-hidden">
-                        <motion.div
-                          initial={{ width: 0 }}
-                          animate={{ width: `${cat.pct}%` }}
-                          transition={{ duration: 0.8, ease: [0.16, 1, 0.3, 1] }}
-                          className={`h-full bg-gradient-to-r ${gradient} rounded-full`}
-                        />
-                      </div>
-                    </div>
-                  </div>
-                )
-              })}
             </div>
           )}
         </motion.div>
@@ -269,27 +395,22 @@ export default function AdminDashboard() {
             </div>
             <p className="text-sm font-bold text-gray-900">Hostel Block Heatmap</p>
           </div>
-          <div className="grid grid-cols-2 gap-3">
-            {hostelHeatmap.map((h) => (
-              <div key={h.block} className="bg-gray-50 rounded-2xl p-4">
-                <div className="flex items-center justify-between mb-2">
-                  <span className="text-xs font-bold text-gray-800">{h.block}</span>
-                  <span className="text-xs font-bold text-gray-900">{h.tickets} tickets</span>
-                </div>
-                <div className="h-2 bg-gray-200 rounded-full overflow-hidden">
-                  <motion.div
-                    initial={{ width: 0 }}
-                    animate={{ width: `${h.pct}%` }}
-                    transition={{ duration: 0.8, ease: [0.16, 1, 0.3, 1] }}
-                    className={`h-full ${h.color} rounded-full`}
-                  />
-                </div>
-              </div>
-            ))}
-          </div>
+          {hostelStats.length === 0 || hostelStats.every(h => h.tickets === 0) ? (
+            <p className="text-xs text-gray-400 text-center py-4">No hostel tickets yet</p>
+          ) : (
+            <ResponsiveContainer width="100%" height={140}>
+              <BarChart data={hostelStats}>
+                <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
+                <XAxis dataKey="block" tick={{ fontSize: 10, fill: '#9CA3AF' }} axisLine={false} tickLine={false} />
+                <YAxis tick={{ fontSize: 10, fill: '#9CA3AF' }} axisLine={false} tickLine={false} />
+                <Tooltip content={<CustomTooltip />} />
+                <Bar dataKey="tickets" fill="#F97316" radius={[4, 4, 0, 0]} name="Tickets" />
+              </BarChart>
+            </ResponsiveContainer>
+          )}
         </motion.div>
 
-        {/* Active Events */}
+        {/* College Calendar */}
         <motion.div
           initial={{ opacity: 0, y: 16 }}
           animate={{ opacity: 1, y: 0 }}
@@ -308,7 +429,11 @@ export default function AdminDashboard() {
             </button>
           </div>
           <div className="space-y-2">
-            {recentEvents.map((ev) => (
+            {[
+              { title: 'End Semester Exam', date: 'May 15–22', multiplier: '2.0x', color: 'bg-red-500' },
+              { title: 'College Day', date: 'May 25', multiplier: '1.3x', color: 'bg-violet-500' },
+              { title: 'Summer Holiday', date: 'Jun 1–30', multiplier: '0.7x', color: 'bg-green-500' },
+            ].map((ev) => (
               <div key={ev.title} className="flex items-center gap-3 p-3 bg-gray-50 rounded-2xl">
                 <div className={`w-2 h-8 ${ev.color} rounded-full flex-shrink-0`} />
                 <div className="flex-1">
