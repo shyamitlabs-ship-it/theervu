@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../../lib/AuthContext'
-import { createTicket } from '../../lib/tickets'
+import { createTicket, getSimilarTickets } from '../../lib/tickets'
 import { supabase } from '../../lib/supabase'
 import { classifyTicket } from '../../lib/groq'
 import {
@@ -21,12 +21,10 @@ const categories = [
   { id: 'library', label: 'Library', icon: Library, gradient: 'from-indigo-500 to-blue-400', light: 'bg-indigo-50 border-indigo-200' },
 ]
 
-const locations = ['Hostel Block A', 'Hostel Block B', 'Hostel Block C', 'Hostel Block D', 'Main Block', 'CSE Block', 'IT Block', 'ECE Block', 'Mechanical Block', 'Library', 'Canteen', 'Sports Block', 'Seminar Hall', 'Principal Office', 'Other']
-
-const similarTickets = [
-  { id: 's1', title: 'WiFi down in Block C — Room 301', resolvedIn: '2h', solution: 'Router was reset by IT team. Fixed.' },
-  { id: 's2', title: 'No internet in hostel after 10pm', resolvedIn: '4h', solution: 'ISP issue, escalated and resolved.' },
-  { id: 's3', title: 'WiFi password not working', resolvedIn: '30m', solution: 'Password reset by IT. Contact IT desk.' },
+const locations = [
+  'Hostel Block A', 'Hostel Block B', 'Hostel Block C', 'Hostel Block D',
+  'Main Block', 'CSE Block', 'IT Block', 'ECE Block', 'Mechanical Block',
+  'Library', 'Canteen', 'Sports Block', 'Seminar Hall', 'Principal Office', 'Other'
 ]
 
 const steps = ['Category', 'Details', 'Review']
@@ -35,8 +33,6 @@ export default function RaiseTicket() {
   const navigate = useNavigate()
   const { user } = useAuth()
   const [step, setStep] = useState(0)
-  const [categoryDbId, setCategoryDbId] = useState('')
-  const [categories_db, setCategories_db] = useState<any[]>([])
   const [selectedCategory, setSelectedCategory] = useState('')
   const [title, setTitle] = useState('')
   const [description, setDescription] = useState('')
@@ -44,13 +40,24 @@ export default function RaiseTicket() {
   const [showSimilar, setShowSimilar] = useState(false)
   const [submitted, setSubmitted] = useState(false)
   const [deflected, setDeflected] = useState(false)
+  const [realSimilarTickets, setRealSimilarTickets] = useState<any[]>([])
 
   const selectedCat = categories.find(c => c.id === selectedCategory)
 
-  const handleDescriptionChange = (val: string) => {
+  const handleDescriptionChange = async (val: string) => {
     setDescription(val)
-    if (val.length > 20 && !showSimilar) {
-      setTimeout(() => setShowSimilar(true), 800)
+    if (val.length > 20 && selectedCategory) {
+      const { data: cats } = await supabase.from('categories').select('*')
+      const matchedCat = cats?.find((c: any) =>
+        c.name.toLowerCase() === (categories.find(cat => cat.id === selectedCategory)?.label || '').toLowerCase()
+      )
+      if (matchedCat) {
+        const similar = await getSimilarTickets(title, val, matchedCat.id)
+        if (similar.length > 0) {
+          setRealSimilarTickets(similar)
+          setShowSimilar(true)
+        }
+      }
     }
   }
 
@@ -59,11 +66,8 @@ export default function RaiseTicket() {
     setSubmitted(true)
 
     const { data: cats } = await supabase.from('categories').select('*')
-
-    // Run Groq classification
     const classification = await classifyTicket(title, description, location || 'Campus')
 
-    // If AI is confident (>75%), use AI category. Otherwise use student's selection.
     const finalCategoryName = classification.confidence > 0.75
       ? classification.category
       : selectedCat?.label
@@ -101,7 +105,6 @@ export default function RaiseTicket() {
             <CheckCircle2 size={48} className="text-white" />
           </motion.div>
           <h2 className="text-2xl font-bold text-gray-900 mb-2">Ticket Raised!</h2>
-          <p className="text-gray-500 text-sm mb-2">THR-2024-0043</p>
           <p className="text-gray-400 text-sm">We're on it. Redirecting you back...</p>
         </motion.div>
       </div>
@@ -126,8 +129,6 @@ export default function RaiseTicket() {
             <p className="text-xs text-gray-400">Step {step + 1} of {steps.length} — {steps[step]}</p>
           </div>
         </div>
-
-        {/* Step Progress */}
         <div className="max-w-2xl mx-auto px-5 pb-4">
           <div className="flex gap-2">
             {steps.map((s, i) => (
@@ -184,7 +185,6 @@ export default function RaiseTicket() {
                   )
                 })}
               </div>
-
               <motion.button
                 whileTap={{ scale: 0.98 }}
                 disabled={!selectedCategory}
@@ -248,37 +248,42 @@ export default function RaiseTicket() {
                     <MapPin size={11} className="inline mr-1" />Location
                   </label>
                   <div className="flex flex-wrap gap-2">
-                  {locations.map(loc => (
-                    <button
-                      key={loc}
-                      onClick={() => {
-                        setLocation(loc === 'Other' ? '' : loc)
-                        if (loc === 'Other') setLocation('other')
-                      }}
-                      className={`text-xs px-3 py-1.5 rounded-xl border font-medium transition-all ${
-                        (loc === 'Other' && location === 'other') || location === loc
-                          ? 'bg-blue-500 text-white border-blue-500'
-                          : 'bg-white text-gray-600 border-gray-200 hover:border-blue-300'
-                      }`}
-                    >
-                      {loc}
-                    </button>
-                  ))}
-                </div>
-
-                {location === 'other' && (
-                  <motion.div
-                    initial={{ opacity: 0, height: 0 }}
-                    animate={{ opacity: 1, height: 'auto' }}
-                    className="mt-2"
-                  >
-                    <input
-                      placeholder="Describe your location (e.g. Room 204, Lab 3B...)"
-                      onChange={e => setLocation(e.target.value)}
-                      className="w-full bg-white border border-blue-300 rounded-2xl px-4 py-3 text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:border-blue-400 transition-all"
-                    />
-                  </motion.div>
-                )}
+                    {locations.map(loc => (
+                      <button
+                        key={loc}
+                        onClick={() => {
+                          if (loc === 'Other') {
+                            setLocation('other')
+                          } else {
+                            setLocation(loc)
+                          }
+                        }}
+                        className={`text-xs px-3 py-1.5 rounded-xl border font-medium transition-all ${
+                          (loc === 'Other' && location === 'other') || location === loc
+                            ? 'bg-blue-500 text-white border-blue-500'
+                            : 'bg-white text-gray-600 border-gray-200 hover:border-blue-300'
+                        }`}
+                      >
+                        {loc}
+                      </button>
+                    ))}
+                  </div>
+                  <AnimatePresence>
+                    {location === 'other' && (
+                      <motion.div
+                        initial={{ opacity: 0, height: 0 }}
+                        animate={{ opacity: 1, height: 'auto' }}
+                        exit={{ opacity: 0, height: 0 }}
+                        className="mt-2"
+                      >
+                        <input
+                          placeholder="Describe your location (e.g. Room 204, Lab 3B...)"
+                          onChange={e => setLocation(e.target.value)}
+                          className="w-full bg-white border border-blue-300 rounded-2xl px-4 py-3 text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:border-blue-400 transition-all"
+                        />
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
                 </div>
 
                 <div>
@@ -292,7 +297,7 @@ export default function RaiseTicket() {
                 </div>
               </div>
 
-              {/* AI Similar Tickets Panel */}
+              {/* Similar Tickets Panel */}
               <AnimatePresence>
                 {showSimilar && !deflected && (
                   <motion.div
@@ -317,17 +322,17 @@ export default function RaiseTicket() {
                       </button>
                     </div>
                     <div className="space-y-2">
-                      {similarTickets.map((t) => (
+                      {realSimilarTickets.map((t, i) => (
                         <motion.div
-                          key={t.id}
+                          key={t.id || i}
                           whileTap={{ scale: 0.98 }}
                           className="bg-white rounded-2xl p-3 border border-white shadow-sm"
                         >
                           <p className="text-xs font-semibold text-gray-800 mb-0.5">{t.title}</p>
-                          <p className="text-[10px] text-gray-400 mb-2">{t.solution}</p>
+                          <p className="text-[10px] text-gray-400 mb-2">{t.resolution}</p>
                           <div className="flex items-center justify-between">
                             <span className="text-[10px] text-green-600 font-medium bg-green-50 px-2 py-0.5 rounded-full">
-                              Resolved in {t.resolvedIn}
+                              {t.ticket_number || 'Resolved'}
                             </span>
                             <button
                               onClick={() => { setDeflected(true); setShowSimilar(false) }}
@@ -398,7 +403,7 @@ export default function RaiseTicket() {
                     <p className="text-[10px] text-gray-400 uppercase tracking-wide font-semibold mb-1">Description</p>
                     <p className="text-sm text-gray-600 leading-relaxed">{description}</p>
                   </div>
-                  {location && (
+                  {location && location !== 'other' && (
                     <div>
                       <p className="text-[10px] text-gray-400 uppercase tracking-wide font-semibold mb-1">Location</p>
                       <p className="text-sm font-semibold text-gray-800">{location}</p>
@@ -407,14 +412,13 @@ export default function RaiseTicket() {
                 </div>
               </div>
 
-              {/* Priority Preview */}
               <div className="bg-amber-50 border border-amber-100 rounded-2xl p-4 mb-5 flex items-center gap-3">
                 <div className="w-8 h-8 rounded-xl bg-amber-400 flex items-center justify-center">
                   <Sparkles size={16} className="text-white" />
                 </div>
                 <div>
                   <p className="text-xs font-bold text-amber-800">AI Priority Assessment</p>
-                  <p className="text-[10px] text-amber-600">Estimated: High · Exam week detected</p>
+                  <p className="text-[10px] text-amber-600">Priority computed on submission · Exam week active</p>
                 </div>
               </div>
 

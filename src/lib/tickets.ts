@@ -155,3 +155,36 @@ export async function addComment(ticketId: string, authorId: string, content: st
     .single()
   return { data, error }
 }
+export async function getSimilarTickets(title: string, description: string, categoryId: string) {
+  // Get resolved tickets from same category
+  const { data, error } = await supabase
+    .from('tickets')
+    .select(`
+      id, title, description, ticket_number, created_at, resolved_at,
+      ticket_comments(content, is_internal, profiles(role))
+    `)
+    .eq('category_id', categoryId)
+    .eq('status', 'resolved')
+    .order('created_at', { ascending: false })
+    .limit(10)
+
+  if (error || !data || data.length === 0) return []
+
+  // Simple keyword matching — find tickets with similar words
+  const keywords = [...title.toLowerCase().split(' '), ...description.toLowerCase().split(' ')]
+    .filter(w => w.length > 3)
+
+  const scored = data.map(ticket => {
+    const text = `${ticket.title} ${ticket.description}`.toLowerCase()
+    const score = keywords.filter(k => text.includes(k)).length
+    const resolution = (ticket.ticket_comments as any[])
+      ?.filter((c: any) => c.profiles?.role === 'staff' && !c.is_internal)
+      ?.slice(-1)[0]?.content || 'Resolved by support team'
+    return { ...ticket, score, resolution }
+  })
+
+  return scored
+    .filter(t => t.score > 0)
+    .sort((a, b) => b.score - a.score)
+    .slice(0, 3)
+}

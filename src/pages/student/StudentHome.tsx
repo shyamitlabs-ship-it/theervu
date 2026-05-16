@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { motion } from 'framer-motion'
+import { motion, AnimatePresence } from 'framer-motion'
 import { useNavigate, useLocation } from 'react-router-dom'
 import {
   Plus, Bell, Wifi, Zap, BookOpen, Bus, UtensilsCrossed,
@@ -7,7 +7,7 @@ import {
   AlertCircle, Loader2, TrendingUp
 } from 'lucide-react'
 import { useAuth } from '../../lib/AuthContext'
-import { requestNotificationPermission, showLocalNotification } from '../../lib/notifications'
+import { requestNotificationPermission } from '../../lib/notifications'
 import { getStudentTickets } from '../../lib/tickets'
 
 const categories = [
@@ -45,6 +45,63 @@ const navItems = [
   { label: 'Notifications', icon: Bell, route: '/student/notifications' },
 ]
 
+const campusPhotos = [
+  { url: 'https://images.unsplash.com/photo-1498243691581-b145c3f54a5a?w=600&q=80', caption: 'Campus Life' },
+  { url: 'https://images.unsplash.com/photo-1541339907198-e08756dedf3f?w=600&q=80', caption: 'Study Together' },
+  { url: 'https://images.unsplash.com/photo-1571260899304-425eee4c7efc?w=600&q=80', caption: 'College Days' },
+  { url: 'https://images.unsplash.com/photo-1519452575417-564c1401ecc0?w=600&q=80', caption: 'Learning Together' },
+  { url: 'https://images.unsplash.com/photo-1522071820081-009f0129c71c?w=600&q=80', caption: 'Campus Energy' },
+]
+
+function CampusPhotoWidget() {
+  const [current, setCurrent] = useState(0)
+
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setCurrent(prev => (prev + 1) % campusPhotos.length)
+    }, 4000)
+    return () => clearInterval(interval)
+  }, [])
+
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 16 }}
+      animate={{ opacity: 1, y: 0 }}
+      className="mt-5 rounded-3xl overflow-hidden relative h-44 shadow-sm"
+    >
+      <AnimatePresence mode="wait">
+        <motion.img
+          key={current}
+          src={campusPhotos[current].url}
+          alt={campusPhotos[current].caption}
+          initial={{ opacity: 0, scale: 1.05 }}
+          animate={{ opacity: 1, scale: 1 }}
+          exit={{ opacity: 0, scale: 0.98 }}
+          transition={{ duration: 0.7, ease: [0.16, 1, 0.3, 1] }}
+          className="absolute inset-0 w-full h-full object-cover"
+        />
+      </AnimatePresence>
+      <div className="absolute inset-0 bg-gradient-to-t from-black/50 via-transparent to-transparent" />
+      <div className="absolute bottom-3 left-4 right-4 flex items-center justify-between">
+        <span className="text-white text-xs font-semibold">{campusPhotos[current].caption}</span>
+        <div className="flex gap-1.5 items-center">
+          {campusPhotos.map((_, i) => (
+            <motion.div
+              key={i}
+              animate={{ width: i === current ? 16 : 6 }}
+              transition={{ duration: 0.3 }}
+              onClick={() => setCurrent(i)}
+              className={`h-1.5 rounded-full cursor-pointer transition-colors ${
+                i === current ? 'bg-white' : 'bg-white/40'
+              }`}
+            />
+          ))}
+        </div>
+      </div>
+    </motion.div>
+  )
+}
+
 export default function StudentHome() {
   const navigate = useNavigate()
   const location = useLocation()
@@ -58,7 +115,6 @@ export default function StudentHome() {
   useEffect(() => {
     if (user) {
       loadTickets()
-      // Request push notification permission
       if (Notification.permission === 'default') {
         setTimeout(() => {
           requestNotificationPermission(user.id)
@@ -93,14 +149,20 @@ export default function StudentHome() {
       {/* Header */}
       <div className="bg-white/80 backdrop-blur-xl border-b border-gray-100 sticky top-0 z-40">
         <div className="max-w-2xl mx-auto px-5 py-4 flex items-center justify-between">
-          <span className="text-xl font-bold" style={{
-            background: 'linear-gradient(135deg, #3B82F6 0%, #06B6D4 100%)',
-            WebkitBackgroundClip: 'text',
-            WebkitTextFillColor: 'transparent',
-            backgroundClip: 'text',
-          }}>தீர்வு</span>
+          <div>
+            <span className="text-xl font-bold" style={{
+              background: 'linear-gradient(135deg, #3B82F6 0%, #06B6D4 100%)',
+              WebkitBackgroundClip: 'text',
+              WebkitTextFillColor: 'transparent',
+              backgroundClip: 'text',
+            }}>தீர்வு</span>
+            <p className="text-xs text-gray-400 font-medium">{greeting}, {user?.name?.split(' ')[0]} 👋</p>
+          </div>
           <div className="flex items-center gap-3">
-            <motion.button whileTap={{ scale: 0.93 }} className="relative w-10 h-10 rounded-2xl bg-gray-100 flex items-center justify-center">
+            <motion.button
+              whileTap={{ scale: 0.93 }}
+              className="relative w-10 h-10 rounded-2xl bg-gray-100 flex items-center justify-center"
+            >
               <Bell size={18} className="text-gray-600" />
             </motion.button>
             <motion.button
@@ -116,12 +178,15 @@ export default function StudentHome() {
 
       <div className="max-w-2xl mx-auto px-5 pb-28">
 
+        {/* Campus Photo Widget */}
+        <CampusPhotoWidget />
+
         {/* Hero CTA */}
         <motion.div
           initial={{ opacity: 0, y: 24 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.5, ease: [0.16, 1, 0.3, 1] }}
-          className="mt-6 rounded-3xl overflow-hidden relative"
+          className="mt-4 rounded-3xl overflow-hidden relative"
         >
           <div className="absolute inset-0 bg-gradient-to-br from-[#0a0a0a] via-[#1a1a2e] to-[#16213e]" />
           <div className="absolute top-0 right-0 w-64 h-64 bg-blue-600/20 rounded-full blur-3xl" />
