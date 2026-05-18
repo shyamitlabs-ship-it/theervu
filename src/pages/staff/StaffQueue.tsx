@@ -8,6 +8,9 @@ import {
 } from 'lucide-react'
 import { getStaffTickets } from '../../lib/tickets'
 import { useAuth } from '../../lib/AuthContext'
+import { supabase } from '../../lib/supabase'
+import ProfileModal from '../../components/shared/ProfileModal'
+
 const categoryIcons: Record<string, any> = {
   'IT & Network': Wifi, 'Hostel': Zap, 'Academics': BookOpen,
   'Transport': Bus, 'Canteen': UtensilsCrossed, 'Medical': Stethoscope, 'Library': Library,
@@ -35,13 +38,76 @@ const filters = ['All', 'Critical', 'Open', 'In Progress']
 const container = { hidden: { opacity: 0 }, show: { opacity: 1, transition: { staggerChildren: 0.06 } } }
 const item = { hidden: { opacity: 0, y: 16 }, show: { opacity: 1, y: 0, transition: { duration: 0.4, ease: [0.16, 1, 0.3, 1] } } }
 
+function StaffContextWidget({ tickets }: { tickets: any[] }) {
+  const hour = new Date().getHours()
+  const isNight = hour >= 22 || hour < 6
+  const isEvening = hour >= 18 && hour < 22
+
+  const critical = tickets.filter(t => t.priority_label === 'critical').length
+  const overdue = tickets.filter(t => {
+    if (!t.sla_deadline) return false
+    return new Date(t.sla_deadline) < new Date() && t.status !== 'resolved'
+  }).length
+  const unassigned = tickets.filter(t => !t.assigned_staff_id && t.status === 'open').length
+
+  const timeGreeting = isNight ? '🌙 Night shift' : isEvening ? '🌆 Evening shift' : '☀️ Day shift'
+  const timeColor = isNight ? 'from-indigo-900 to-blue-900' : isEvening ? 'from-violet-800 to-indigo-800' : 'from-violet-600 to-purple-600'
+
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 12 }}
+      animate={{ opacity: 1, y: 0 }}
+      className={`bg-gradient-to-r ${timeColor} rounded-3xl p-5 mb-5`}
+    >
+      <div className="flex items-start justify-between mb-3">
+        <div>
+          <p className="text-white/60 text-xs font-medium">{timeGreeting}</p>
+          <p className="text-white font-bold text-base mt-0.5">
+            {critical > 0 ? `⚠️ ${critical} critical ticket${critical > 1 ? 's' : ''} need attention`
+              : overdue > 0 ? `⏰ ${overdue} ticket${overdue > 1 ? 's' : ''} past SLA deadline`
+              : unassigned > 0 ? `📋 ${unassigned} unassigned ticket${unassigned > 1 ? 's' : ''}`
+              : '✅ Queue looks healthy'}
+          </p>
+        </div>
+        <div className="text-right">
+          <p className="text-white/50 text-[9px] uppercase tracking-wide">Queue</p>
+          <p className="text-white font-bold text-2xl">{tickets.length}</p>
+        </div>
+      </div>
+      <div className="flex gap-2 flex-wrap">
+        {critical > 0 && (
+          <span className="text-[10px] font-bold bg-red-500/30 text-red-200 border border-red-400/30 px-2.5 py-1 rounded-full">
+            {critical} Critical
+          </span>
+        )}
+        {overdue > 0 && (
+          <span className="text-[10px] font-bold bg-amber-500/30 text-amber-200 border border-amber-400/30 px-2.5 py-1 rounded-full">
+            {overdue} Overdue
+          </span>
+        )}
+        {unassigned > 0 && (
+          <span className="text-[10px] font-bold bg-blue-500/30 text-blue-200 border border-blue-400/30 px-2.5 py-1 rounded-full">
+            {unassigned} Unassigned
+          </span>
+        )}
+        {critical === 0 && overdue === 0 && unassigned === 0 && (
+          <span className="text-[10px] font-bold bg-green-500/30 text-green-200 border border-green-400/30 px-2.5 py-1 rounded-full">
+            All clear
+          </span>
+        )}
+      </div>
+    </motion.div>
+  )
+}
+
 export default function StaffQueue() {
   const navigate = useNavigate()
-  const { user, signOut } = useAuth()
+  const { user } = useAuth()
   const [activeFilter, setActiveFilter] = useState('All')
   const [search, setSearch] = useState('')
   const [tickets, setTickets] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
+  const [showProfile, setShowProfile] = useState(false)
 
   useEffect(() => {
     loadTickets()
@@ -76,12 +142,13 @@ export default function StaffQueue() {
             backgroundClip: 'text',
           }}>தீர்வு</span>
           <div className="flex items-center gap-3">
-            <motion.button whileTap={{ scale: 0.93 }} className="relative w-10 h-10 rounded-2xl bg-gray-100 flex items-center justify-center">
+            <motion.button whileTap={{ scale: 0.93 }}
+              className="relative w-10 h-10 rounded-2xl bg-gray-100 flex items-center justify-center">
               <Bell size={18} className="text-gray-600" />
             </motion.button>
             <motion.button
               whileTap={{ scale: 0.93 }}
-              onClick={signOut}
+              onClick={() => setShowProfile(true)}
               className="w-10 h-10 rounded-2xl bg-gradient-to-br from-violet-500 to-purple-400 flex items-center justify-center text-white font-bold text-sm"
             >
               {user?.name?.split(' ').map((n: string) => n[0]).join('').slice(0, 2) || 'ST'}
@@ -92,24 +159,18 @@ export default function StaffQueue() {
         <div className="max-w-2xl mx-auto px-5 pb-3">
           <div className="relative">
             <Search size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400" />
-            <input
-              value={search}
-              onChange={e => setSearch(e.target.value)}
+            <input value={search} onChange={e => setSearch(e.target.value)}
               placeholder="Search tickets or students..."
-              className="w-full bg-gray-100 rounded-2xl pl-9 pr-4 py-2.5 text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:bg-gray-200 transition-all"
-            />
+              className="w-full bg-gray-100 rounded-2xl pl-9 pr-4 py-2.5 text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:bg-gray-200 transition-all" />
           </div>
         </div>
 
         <div className="max-w-2xl mx-auto px-5 pb-4 flex gap-2 overflow-x-auto">
           {filters.map(f => (
-            <button
-              key={f}
-              onClick={() => setActiveFilter(f)}
+            <button key={f} onClick={() => setActiveFilter(f)}
               className={`flex-shrink-0 text-xs font-semibold px-4 py-2 rounded-xl transition-all ${
                 activeFilter === f ? 'bg-gray-900 text-white' : 'bg-gray-100 text-gray-500 hover:bg-gray-200'
-              }`}
-            >
+              }`}>
               {f}
             </button>
           ))}
@@ -117,6 +178,9 @@ export default function StaffQueue() {
       </div>
 
       <div className="max-w-2xl mx-auto px-5 py-4">
+
+        {/* Context Widget */}
+        {!loading && <StaffContextWidget tickets={tickets} />}
 
         {/* Stats Row */}
         <div className="grid grid-cols-3 gap-3 mb-5">
@@ -145,13 +209,33 @@ export default function StaffQueue() {
 
         <motion.div variants={container} initial="hidden" animate="show" className="space-y-3">
           {loading ? (
-            <div className="text-center py-16">
-              <div className="w-8 h-8 border-2 border-gray-200 border-t-blue-500 rounded-full animate-spin mx-auto mb-3" />
-              <p className="text-sm text-gray-400">Loading tickets...</p>
+            <div className="space-y-3">
+              {[1, 2, 3].map(i => (
+                <div key={i} className="bg-white rounded-3xl p-5 border border-gray-100 border-l-4 border-l-gray-200">
+                  <div className="flex items-start gap-3 mb-3">
+                    <div className="w-10 h-10 rounded-2xl bg-gray-100 animate-pulse flex-shrink-0" />
+                    <div className="flex-1 space-y-2">
+                      <div className="h-4 bg-gray-100 rounded-full animate-pulse w-2/3" />
+                      <div className="h-3 bg-gray-100 rounded-full animate-pulse w-1/3" />
+                    </div>
+                    <div className="h-6 w-16 bg-gray-100 rounded-full animate-pulse" />
+                  </div>
+                  <div className="h-1.5 bg-gray-100 rounded-full animate-pulse mb-3" />
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <div className="w-6 h-6 rounded-full bg-gray-100 animate-pulse" />
+                      <div className="h-3 w-24 bg-gray-100 rounded-full animate-pulse" />
+                    </div>
+                    <div className="h-3 w-12 bg-gray-100 rounded-full animate-pulse" />
+                  </div>
+                </div>
+              ))}
             </div>
           ) : filtered.length === 0 ? (
             <div className="text-center py-16">
-              <p className="text-sm text-gray-400">No tickets found</p>
+              <p className="text-2xl mb-2">🎉</p>
+              <p className="text-sm font-semibold text-gray-700">No tickets found</p>
+              <p className="text-xs text-gray-400 mt-1">Queue is clear</p>
             </div>
           ) : filtered.map((ticket) => {
             const priority = priorityConfig[ticket.priority_label] || priorityConfig['medium']
@@ -162,13 +246,9 @@ export default function StaffQueue() {
             const timeAgo = new Date(ticket.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
 
             return (
-              <motion.div
-                key={ticket.id}
-                variants={item}
-                whileTap={{ scale: 0.99 }}
+              <motion.div key={ticket.id} variants={item} whileTap={{ scale: 0.99 }}
                 onClick={() => navigate(`/staff/tickets/${ticket.id}`)}
-                className={`bg-white rounded-3xl border-l-4 ${priority.border} border border-gray-100 shadow-sm hover:shadow-md transition-all cursor-pointer overflow-hidden`}
-              >
+                className={`bg-white rounded-3xl border-l-4 ${priority.border} border border-gray-100 shadow-sm hover:shadow-md transition-all cursor-pointer overflow-hidden`}>
                 {ticket.priority_label === 'critical' && (
                   <div className="bg-red-50 px-5 py-2 flex items-center gap-2 border-b border-red-100">
                     <AlertCircle size={12} className="text-red-500" />
@@ -207,12 +287,10 @@ export default function StaffQueue() {
                       </span>
                     </div>
                     <div className="h-1.5 bg-gray-100 rounded-full overflow-hidden">
-                      <motion.div
-                        initial={{ width: 0 }}
+                      <motion.div initial={{ width: 0 }}
                         animate={{ width: `${Math.min(ticket.priority_score, 100)}%` }}
                         transition={{ duration: 0.8, ease: [0.16, 1, 0.3, 1] }}
-                        className={`h-full ${slaColor} rounded-full`}
-                      />
+                        className={`h-full ${slaColor} rounded-full`} />
                     </div>
                   </div>
 
@@ -240,6 +318,8 @@ export default function StaffQueue() {
           })}
         </motion.div>
       </div>
+
+      <ProfileModal open={showProfile} onClose={() => setShowProfile(false)} />
     </div>
   )
 }

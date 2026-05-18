@@ -74,10 +74,10 @@ export async function createTicket({
   const eventContext = events && events.length > 0 ? events[0].title : null
 
   // Generate ticket number
-  const { data: countData } = await supabase.from('tickets').select('id', { count: 'exact' })
-  const count = countData?.length || 0
-  const ticketNumber = `THR-${new Date().getFullYear()}-${String(count + 1).padStart(4, '0')}`
-
+  const timestamp = Date.now()
+  const random = Math.floor(Math.random() * 9000 + 1000)
+  const ticketNumber = `THR-${new Date().getFullYear()}-${random}-${timestamp.toString().slice(-4)}`
+  
   // Insert ticket
   const { data, error } = await supabase.from('tickets').insert({
     ticket_number: ticketNumber,

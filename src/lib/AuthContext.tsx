@@ -6,6 +6,11 @@ interface AuthUser {
   email: string
   name: string
   role: 'student' | 'staff' | 'admin'
+  department?: string
+  batch?: string
+  hostel_block?: string
+  phone?: string
+  roll_number?: string
 }
 
 interface AuthContextType {
@@ -49,9 +54,18 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     console.log('Profile error:', error)
 
     if (data) {
-      setUser({ id: data.id, email: data.email, name: data.name, role: data.role })
+      setUser({
+        id: data.id,
+        email: data.email,
+        name: data.name,
+        role: data.role,
+        department: data.department,
+        batch: data.batch,
+        hostel_block: data.hostel_block,
+        phone: data.phone,
+        roll_number: data.roll_number,
+      })
     } else {
-      // Profile not found — sign out
       console.log('No profile found, signing out')
       await supabase.auth.signOut()
     }

@@ -9,6 +9,7 @@ import {
 import { useAuth } from '../../lib/AuthContext'
 import { requestNotificationPermission } from '../../lib/notifications'
 import { getStudentTickets } from '../../lib/tickets'
+import ProfileModal from '../../components/shared/ProfileModal'
 
 const categories = [
   { id: 'hostel', label: 'Hostel', icon: Zap, gradient: 'from-orange-400 to-amber-300', bg: 'bg-orange-50', border: 'border-orange-100' },
@@ -55,46 +56,28 @@ const campusPhotos = [
 
 function CampusPhotoWidget() {
   const [current, setCurrent] = useState(0)
-
   useEffect(() => {
-    const interval = setInterval(() => {
-      setCurrent(prev => (prev + 1) % campusPhotos.length)
-    }, 4000)
+    const interval = setInterval(() => setCurrent(prev => (prev + 1) % campusPhotos.length), 4000)
     return () => clearInterval(interval)
   }, [])
 
   return (
-    <motion.div
-      initial={{ opacity: 0, y: 16 }}
-      animate={{ opacity: 1, y: 0 }}
-      className="mt-5 rounded-3xl overflow-hidden relative h-44 shadow-sm"
-    >
+    <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }}
+      className="mt-5 rounded-3xl overflow-hidden relative h-44 shadow-sm">
       <AnimatePresence mode="wait">
-        <motion.img
-          key={current}
-          src={campusPhotos[current].url}
-          alt={campusPhotos[current].caption}
-          initial={{ opacity: 0, scale: 1.05 }}
-          animate={{ opacity: 1, scale: 1 }}
-          exit={{ opacity: 0, scale: 0.98 }}
+        <motion.img key={current} src={campusPhotos[current].url} alt={campusPhotos[current].caption}
+          initial={{ opacity: 0, scale: 1.05 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.98 }}
           transition={{ duration: 0.7, ease: [0.16, 1, 0.3, 1] }}
-          className="absolute inset-0 w-full h-full object-cover"
-        />
+          className="absolute inset-0 w-full h-full object-cover" />
       </AnimatePresence>
       <div className="absolute inset-0 bg-gradient-to-t from-black/50 via-transparent to-transparent" />
       <div className="absolute bottom-3 left-4 right-4 flex items-center justify-between">
         <span className="text-white text-xs font-semibold">{campusPhotos[current].caption}</span>
         <div className="flex gap-1.5 items-center">
           {campusPhotos.map((_, i) => (
-            <motion.div
-              key={i}
-              animate={{ width: i === current ? 16 : 6 }}
-              transition={{ duration: 0.3 }}
+            <motion.div key={i} animate={{ width: i === current ? 16 : 6 }} transition={{ duration: 0.3 }}
               onClick={() => setCurrent(i)}
-              className={`h-1.5 rounded-full cursor-pointer transition-colors ${
-                i === current ? 'bg-white' : 'bg-white/40'
-              }`}
-            />
+              className={`h-1.5 rounded-full cursor-pointer ${i === current ? 'bg-white' : 'bg-white/40'}`} />
           ))}
         </div>
       </div>
@@ -105,9 +88,10 @@ function CampusPhotoWidget() {
 export default function StudentHome() {
   const navigate = useNavigate()
   const location = useLocation()
-  const { user, signOut } = useAuth()
+  const { user } = useAuth()
   const [tickets, setTickets] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
+  const [showProfile, setShowProfile] = useState(false)
 
   const hour = new Date().getHours()
   const greeting = hour < 12 ? 'Good morning' : hour < 17 ? 'Good afternoon' : 'Good evening'
@@ -116,9 +100,7 @@ export default function StudentHome() {
     if (user) {
       loadTickets()
       if (Notification.permission === 'default') {
-        setTimeout(() => {
-          requestNotificationPermission(user.id)
-        }, 3000)
+        setTimeout(() => requestNotificationPermission(user.id), 3000)
       }
     }
   }, [user])
@@ -152,42 +134,30 @@ export default function StudentHome() {
           <div>
             <span className="text-xl font-bold" style={{
               background: 'linear-gradient(135deg, #3B82F6 0%, #06B6D4 100%)',
-              WebkitBackgroundClip: 'text',
-              WebkitTextFillColor: 'transparent',
-              backgroundClip: 'text',
+              WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', backgroundClip: 'text'
             }}>தீர்வு</span>
             <p className="text-xs text-gray-400 font-medium">{greeting}, {user?.name?.split(' ')[0]} 👋</p>
           </div>
           <div className="flex items-center gap-3">
-            <motion.button
-              whileTap={{ scale: 0.93 }}
-              className="relative w-10 h-10 rounded-2xl bg-gray-100 flex items-center justify-center"
-            >
+            <motion.button whileTap={{ scale: 0.93 }}
+              className="relative w-10 h-10 rounded-2xl bg-gray-100 flex items-center justify-center">
               <Bell size={18} className="text-gray-600" />
             </motion.button>
-            <motion.button
-              whileTap={{ scale: 0.93 }}
-              onClick={signOut}
-              className="w-10 h-10 rounded-2xl bg-gradient-to-br from-blue-500 to-cyan-400 flex items-center justify-center text-white font-bold text-sm"
-            >
-              {user?.name?.split(' ').map(n => n[0]).join('').slice(0, 2) || 'SS'}
+            <motion.button whileTap={{ scale: 0.93 }} onClick={() => setShowProfile(true)}
+              className="w-10 h-10 rounded-2xl bg-gradient-to-br from-blue-500 to-cyan-400 flex items-center justify-center text-white font-bold text-sm">
+              {user?.name?.split(' ').map((n: string) => n[0]).join('').slice(0, 2) || 'SS'}
             </motion.button>
           </div>
         </div>
       </div>
 
       <div className="max-w-2xl mx-auto px-5 pb-28">
-
-        {/* Campus Photo Widget */}
         <CampusPhotoWidget />
 
         {/* Hero CTA */}
-        <motion.div
-          initial={{ opacity: 0, y: 24 }}
-          animate={{ opacity: 1, y: 0 }}
+        <motion.div initial={{ opacity: 0, y: 24 }} animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.5, ease: [0.16, 1, 0.3, 1] }}
-          className="mt-4 rounded-3xl overflow-hidden relative"
-        >
+          className="mt-4 rounded-3xl overflow-hidden relative">
           <div className="absolute inset-0 bg-gradient-to-br from-[#0a0a0a] via-[#1a1a2e] to-[#16213e]" />
           <div className="absolute top-0 right-0 w-64 h-64 bg-blue-600/20 rounded-full blur-3xl" />
           <div className="absolute bottom-0 left-0 w-48 h-48 bg-violet-600/20 rounded-full blur-3xl" />
@@ -196,12 +166,9 @@ export default function StudentHome() {
             <p className="text-blue-400 text-xs font-semibold tracking-widest uppercase mb-2">Campus Support</p>
             <h2 className="text-white text-2xl font-bold leading-tight mb-1">Need help with<br />something? 🎓</h2>
             <p className="text-white/40 text-sm mb-5">We'll get it sorted, fast.</p>
-            <motion.button
-              whileTap={{ scale: 0.97 }}
-              whileHover={{ scale: 1.02 }}
+            <motion.button whileTap={{ scale: 0.97 }} whileHover={{ scale: 1.02 }}
               onClick={() => navigate('/student/raise')}
-              className="flex items-center gap-2 bg-white text-gray-900 font-semibold text-sm px-5 py-3 rounded-2xl shadow-lg hover:shadow-xl transition-all"
-            >
+              className="flex items-center gap-2 bg-white text-gray-900 font-semibold text-sm px-5 py-3 rounded-2xl shadow-lg hover:shadow-xl transition-all">
               <Plus size={16} />
               Raise a Ticket
             </motion.button>
@@ -228,21 +195,14 @@ export default function StudentHome() {
 
         {/* Categories */}
         <div className="mt-7">
-          <div className="flex items-center justify-between mb-4">
-            <h2 className="text-base font-bold text-gray-900">Quick Raise</h2>
-          </div>
+          <h2 className="text-base font-bold text-gray-900 mb-4">Quick Raise</h2>
           <motion.div variants={container} initial="hidden" animate="show" className="grid grid-cols-4 gap-3">
             {categories.map((cat) => {
               const Icon = cat.icon
               return (
-                <motion.button
-                  key={cat.id}
-                  variants={item}
-                  whileTap={{ scale: 0.94 }}
-                  whileHover={{ y: -3 }}
+                <motion.button key={cat.id} variants={item} whileTap={{ scale: 0.94 }} whileHover={{ y: -3 }}
                   onClick={() => navigate('/student/raise')}
-                  className={`${cat.bg} ${cat.border} border rounded-2xl p-3 flex flex-col items-center gap-2 transition-all`}
-                >
+                  className={`${cat.bg} ${cat.border} border rounded-2xl p-3 flex flex-col items-center gap-2 transition-all`}>
                   <div className={`w-10 h-10 rounded-xl bg-gradient-to-br ${cat.gradient} flex items-center justify-center shadow-sm`}>
                     <Icon size={18} className="text-white" />
                   </div>
@@ -253,7 +213,7 @@ export default function StudentHome() {
           </motion.div>
         </div>
 
-        {/* Real Tickets */}
+        {/* Tickets */}
         <div className="mt-7">
           <div className="flex items-center justify-between mb-4">
             <h2 className="text-base font-bold text-gray-900">Your Tickets</h2>
@@ -263,9 +223,23 @@ export default function StudentHome() {
           </div>
 
           {loading ? (
-            <div className="text-center py-10">
-              <div className="w-8 h-8 border-2 border-gray-200 border-t-blue-500 rounded-full animate-spin mx-auto mb-3" />
-              <p className="text-sm text-gray-400">Loading tickets...</p>
+            <div className="space-y-3">
+              {[1, 2, 3].map(i => (
+                <div key={i} className="bg-white rounded-3xl p-5 border border-gray-100">
+                  <div className="flex items-start justify-between mb-3">
+                    <div className="flex-1 pr-3 space-y-2">
+                      <div className="h-4 bg-gray-100 rounded-full animate-pulse w-3/4" />
+                      <div className="h-3 bg-gray-100 rounded-full animate-pulse w-1/3" />
+                    </div>
+                    <div className="h-6 w-16 bg-gray-100 rounded-full animate-pulse" />
+                  </div>
+                  <div className="h-1.5 bg-gray-100 rounded-full animate-pulse mb-3" />
+                  <div className="flex items-center justify-between">
+                    <div className="h-5 w-20 bg-gray-100 rounded-full animate-pulse" />
+                    <div className="h-3 w-12 bg-gray-100 rounded-full animate-pulse" />
+                  </div>
+                </div>
+              ))}
             </div>
           ) : tickets.length === 0 ? (
             <div className="text-center py-10 bg-white rounded-3xl border border-gray-100">
@@ -280,20 +254,14 @@ export default function StudentHome() {
                 const priority = priorityConfig[ticket.priority_label] || priorityConfig['medium']
                 const StatusIcon = status.icon
                 const slaUsed = ticket.sla_deadline
-                  ? Math.min(100, Math.round(
-                      (Date.now() - new Date(ticket.created_at).getTime()) /
-                      (new Date(ticket.sla_deadline).getTime() - new Date(ticket.created_at).getTime()) * 100
-                    ))
+                  ? Math.min(100, Math.round((Date.now() - new Date(ticket.created_at).getTime()) /
+                      (new Date(ticket.sla_deadline).getTime() - new Date(ticket.created_at).getTime()) * 100))
                   : 50
 
                 return (
-                  <motion.div
-                    key={ticket.id}
-                    variants={item}
-                    whileTap={{ scale: 0.99 }}
+                  <motion.div key={ticket.id} variants={item} whileTap={{ scale: 0.99 }}
                     onClick={() => navigate(`/student/tickets/${ticket.id}`)}
-                    className="bg-white rounded-3xl p-5 border border-gray-100 shadow-sm hover:shadow-md transition-all cursor-pointer"
-                  >
+                    className="bg-white rounded-3xl p-5 border border-gray-100 shadow-sm hover:shadow-md transition-all cursor-pointer">
                     <div className="flex items-start justify-between mb-3">
                       <div className="flex-1 pr-3">
                         <p className="font-semibold text-gray-900 text-sm leading-tight">{ticket.title}</p>
@@ -303,22 +271,17 @@ export default function StudentHome() {
                         {priority.label}
                       </span>
                     </div>
-
                     <div className="mb-3">
                       <div className="flex items-center justify-between mb-1.5">
                         <span className="text-[10px] text-gray-400 font-medium">SLA Health</span>
                         <span className="text-[10px] text-gray-500">{slaUsed}% used</span>
                       </div>
                       <div className="h-1.5 bg-gray-100 rounded-full overflow-hidden">
-                        <motion.div
-                          initial={{ width: 0 }}
-                          animate={{ width: `${slaUsed}%` }}
+                        <motion.div initial={{ width: 0 }} animate={{ width: `${slaUsed}%` }}
                           transition={{ duration: 0.8, delay: 0.2, ease: [0.16, 1, 0.3, 1] }}
-                          className={`h-full ${priority.slaBar} rounded-full`}
-                        />
+                          className={`h-full ${priority.slaBar} rounded-full`} />
                       </div>
                     </div>
-
                     <div className="flex items-center justify-between">
                       <div className={`flex items-center gap-1.5 ${status.color} ${status.bg} px-2.5 py-1 rounded-full`}>
                         <StatusIcon size={11} className={ticket.status === 'in_progress' ? 'animate-spin' : ''} />
@@ -344,12 +307,8 @@ export default function StudentHome() {
             const Icon = nav.icon
             const isActive = location.pathname === nav.route
             return (
-              <motion.button
-                key={nav.label}
-                whileTap={{ scale: 0.9 }}
-                onClick={() => navigate(nav.route)}
-                className="flex flex-col items-center gap-1"
-              >
+              <motion.button key={nav.label} whileTap={{ scale: 0.9 }} onClick={() => navigate(nav.route)}
+                className="flex flex-col items-center gap-1">
                 {nav.special ? (
                   <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-blue-500 to-cyan-400 flex items-center justify-center shadow-lg shadow-blue-500/30 -mt-5">
                     <Icon size={20} className="text-white" />
@@ -365,6 +324,8 @@ export default function StudentHome() {
           })}
         </div>
       </div>
+
+      <ProfileModal open={showProfile} onClose={() => setShowProfile(false)} />
     </div>
   )
 }

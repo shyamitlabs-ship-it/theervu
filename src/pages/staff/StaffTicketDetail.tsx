@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { useNavigate, useParams } from 'react-router-dom'
 import {
-  ArrowLeft, CheckCircle2, Loader2, AlertCircle,
+  ArrowLeft, CheckCircle2, Loader2,
   MessageCircle, Send, User, Zap, Sparkles, Eye, EyeOff,
   ChevronDown, MapPin, Calendar
 } from 'lucide-react'
@@ -41,41 +41,27 @@ export default function StaffTicketDetail() {
   useEffect(() => {
     if (id) {
       loadData()
-
-      // Realtime for new comments
       const commentSub = supabase
         .channel(`staff-ticket-${id}`)
         .on('postgres_changes', {
-          event: 'INSERT',
-          schema: 'public',
-          table: 'ticket_comments',
+          event: 'INSERT', schema: 'public', table: 'ticket_comments',
           filter: `ticket_id=eq.${id}`
         }, async (payload) => {
           const { data: profile } = await supabase
-            .from('profiles')
-            .select('name, role')
-            .eq('id', payload.new.author_id)
-            .single()
+            .from('profiles').select('name, role').eq('id', payload.new.author_id).single()
           setComments((prev: any[]) => [...prev, { ...payload.new, profiles: profile }])
         })
         .subscribe()
-
       return () => { supabase.removeChannel(commentSub) }
     }
   }, [id])
 
   const loadData = async () => {
     const { data: t } = await getTicketById(id!)
-    if (t) {
-      setTicket(t)
-      setStatus(t.status)
-    }
-
+    if (t) { setTicket(t); setStatus(t.status) }
     const { data: c } = await supabase
-      .from('ticket_comments')
-      .select('*, profiles(name, role)')
-      .eq('ticket_id', id!)
-      .order('created_at', { ascending: true })
+      .from('ticket_comments').select('*, profiles(name, role)')
+      .eq('ticket_id', id!).order('created_at', { ascending: true })
     if (c) setComments(c)
     setLoading(false)
   }
@@ -134,45 +120,30 @@ export default function StaffTicketDetail() {
       {/* Header */}
       <div className="bg-white/80 backdrop-blur-xl border-b border-gray-100 sticky top-0 z-40">
         <div className="max-w-2xl mx-auto px-5 py-4 flex items-center gap-4">
-          <motion.button
-            whileTap={{ scale: 0.9 }}
-            onClick={() => navigate('/staff')}
-            className="w-9 h-9 rounded-xl bg-gray-100 flex items-center justify-center"
-          >
+          <motion.button whileTap={{ scale: 0.9 }} onClick={() => navigate('/staff')}
+            className="w-9 h-9 rounded-xl bg-gray-100 flex items-center justify-center">
             <ArrowLeft size={18} className="text-gray-600" />
           </motion.button>
           <div className="flex-1">
             <h1 className="text-base font-bold text-gray-900">{ticket.ticket_number}</h1>
-            <p className="text-xs text-gray-400">{ticket.categories?.name} · Assigned to you</p>
+            <p className="text-xs text-gray-400">{ticket.categories?.name || 'Uncategorized'} · {getTimeAgo(ticket.created_at)}</p>
           </div>
-
-          {/* Status Selector */}
           <div className="relative">
-            <motion.button
-              whileTap={{ scale: 0.97 }}
-              onClick={() => setShowStatusMenu(!showStatusMenu)}
-              className={`flex items-center gap-1.5 text-xs font-bold px-3 py-1.5 rounded-xl border ${currentStatus.color}`}
-            >
+            <motion.button whileTap={{ scale: 0.97 }} onClick={() => setShowStatusMenu(!showStatusMenu)}
+              className={`flex items-center gap-1.5 text-xs font-bold px-3 py-1.5 rounded-xl border ${currentStatus.color}`}>
               {currentStatus.label}
               <ChevronDown size={12} />
             </motion.button>
             <AnimatePresence>
               {showStatusMenu && (
-                <motion.div
-                  initial={{ opacity: 0, y: 8, scale: 0.95 }}
-                  animate={{ opacity: 1, y: 0, scale: 1 }}
-                  exit={{ opacity: 0, y: 8, scale: 0.95 }}
-                  transition={{ duration: 0.15 }}
-                  className="absolute right-0 top-10 bg-white rounded-2xl border border-gray-100 shadow-xl overflow-hidden z-50 min-w-[160px]"
-                >
+                <motion.div initial={{ opacity: 0, y: 8, scale: 0.95 }} animate={{ opacity: 1, y: 0, scale: 1 }}
+                  exit={{ opacity: 0, y: 8, scale: 0.95 }} transition={{ duration: 0.15 }}
+                  className="absolute right-0 top-10 bg-white rounded-2xl border border-gray-100 shadow-xl overflow-hidden z-50 min-w-[160px]">
                   {statusOptions.map(opt => (
-                    <button
-                      key={opt.id}
-                      onClick={() => handleStatusChange(opt.id)}
+                    <button key={opt.id} onClick={() => handleStatusChange(opt.id)}
                       className={`w-full text-left px-4 py-2.5 text-xs font-semibold hover:bg-gray-50 transition-colors ${
                         status === opt.id ? 'text-blue-600 bg-blue-50' : 'text-gray-700'
-                      }`}
-                    >
+                      }`}>
                       {opt.label}
                     </button>
                   ))}
@@ -212,14 +183,17 @@ export default function StaffTicketDetail() {
             </div>
             <div>
               <p className="font-bold text-gray-900 text-sm">{ticket.profiles?.name || 'Student'}</p>
-              <p className="text-xs text-gray-400">{ticket.profiles?.batch || ''} · {ticket.profiles?.department || ''}</p>
+              <p className="text-xs text-gray-400">
+                {ticket.profiles?.roll_number ? `${ticket.profiles.roll_number} · ` : ''}
+                {ticket.profiles?.batch || ''}{ticket.profiles?.department ? ` · ${ticket.profiles.department}` : ''}
+              </p>
             </div>
           </div>
           <div className="grid grid-cols-2 gap-2">
-            {ticket.profiles?.hostel_block && (
+            {ticket.location && (
               <div className="flex items-center gap-2 bg-gray-50 rounded-xl px-3 py-2">
                 <MapPin size={12} className="text-gray-400 flex-shrink-0" />
-                <span className="text-[10px] text-gray-600 font-medium">{ticket.location || ticket.profiles?.hostel_block}</span>
+                <span className="text-[10px] text-gray-600 font-medium">{ticket.location}</span>
               </div>
             )}
             {ticket.profiles?.batch && (
@@ -247,12 +221,9 @@ export default function StaffTicketDetail() {
             </span>
           </div>
           <div className="h-2 bg-gray-100 rounded-full overflow-hidden">
-            <motion.div
-              initial={{ width: 0 }}
-              animate={{ width: `${slaUsed}%` }}
+            <motion.div initial={{ width: 0 }} animate={{ width: `${slaUsed}%` }}
               transition={{ duration: 1, ease: [0.16, 1, 0.3, 1] }}
-              className={`h-full rounded-full ${slaUsed > 80 ? 'bg-red-500' : slaUsed > 50 ? 'bg-amber-400' : 'bg-green-400'}`}
-            />
+              className={`h-full rounded-full ${slaUsed > 80 ? 'bg-red-500' : slaUsed > 50 ? 'bg-amber-400' : 'bg-green-400'}`} />
           </div>
           <p className="text-[10px] text-gray-400 mt-1.5">
             Deadline: {ticket.sla_deadline ? new Date(ticket.sla_deadline).toLocaleString() : 'N/A'}
@@ -262,12 +233,8 @@ export default function StaffTicketDetail() {
         {/* AI Similar Tickets */}
         <AnimatePresence>
           {showSimilar && (
-            <motion.div
-              initial={{ opacity: 0, y: 12 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, height: 0 }}
-              className="bg-gradient-to-br from-violet-50 to-blue-50 border border-violet-100 rounded-3xl p-5"
-            >
+            <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, height: 0 }}
+              className="bg-gradient-to-br from-violet-50 to-blue-50 border border-violet-100 rounded-3xl p-5">
               <div className="flex items-center justify-between mb-3">
                 <div className="flex items-center gap-2">
                   <div className="w-7 h-7 rounded-xl bg-gradient-to-br from-violet-500 to-blue-500 flex items-center justify-center">
@@ -282,7 +249,7 @@ export default function StaffTicketDetail() {
               </div>
               <div className="space-y-2">
                 {[
-                  { title: `Similar ${ticket.categories?.name} issue`, solution: 'Check the main infrastructure unit and reset if needed.', time: '3 days ago' },
+                  { title: `Similar ${ticket.categories?.name || 'issue'}`, solution: 'Check the main infrastructure unit and reset if needed.', time: '3 days ago' },
                   { title: 'Recurring issue in same area', solution: 'Escalate to facilities team if not resolved within 2 hours.', time: '1 week ago' },
                 ].map((t, i) => (
                   <div key={i} className="bg-white rounded-2xl p-3 border border-white shadow-sm">
@@ -302,7 +269,6 @@ export default function StaffTicketDetail() {
             <MessageCircle size={11} className="inline mr-1" />
             Conversation {comments.length > 0 && `(${comments.length})`}
           </p>
-
           {comments.length === 0 ? (
             <div className="text-center py-6">
               <p className="text-xs text-gray-400">No messages yet.</p>
@@ -310,12 +276,8 @@ export default function StaffTicketDetail() {
           ) : (
             <div className="space-y-3 mb-4">
               {comments.map((msg) => (
-                <motion.div
-                  key={msg.id}
-                  initial={{ opacity: 0, y: 6 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  className={`flex ${msg.profiles?.role === 'student' ? 'justify-start' : 'justify-end'}`}
-                >
+                <motion.div key={msg.id} initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }}
+                  className={`flex ${msg.profiles?.role === 'student' ? 'justify-start' : 'justify-end'}`}>
                   {msg.profiles?.role === 'student' && (
                     <div className="w-7 h-7 rounded-full bg-gradient-to-br from-blue-500 to-cyan-400 flex items-center justify-center mr-2 mt-auto flex-shrink-0">
                       <User size={12} className="text-white" />
@@ -345,48 +307,34 @@ export default function StaffTicketDetail() {
             </div>
           )}
 
-          {/* Toggle */}
           <div className="flex items-center gap-2 mb-3">
-            <button
-              onClick={() => setIsInternal(false)}
+            <button onClick={() => setIsInternal(false)}
               className={`flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-xl font-semibold transition-all ${
                 !isInternal ? 'bg-violet-500 text-white' : 'bg-gray-100 text-gray-500'
-              }`}
-            >
+              }`}>
               <Eye size={11} /> Reply to student
             </button>
-            <button
-              onClick={() => setIsInternal(true)}
+            <button onClick={() => setIsInternal(true)}
               className={`flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-xl font-semibold transition-all ${
                 isInternal ? 'bg-amber-400 text-white' : 'bg-gray-100 text-gray-500'
-              }`}
-            >
+              }`}>
               <EyeOff size={11} /> Internal note
             </button>
           </div>
 
           <div className="flex gap-2">
-            <input
-              value={message}
-              onChange={e => setMessage(e.target.value)}
+            <input value={message} onChange={e => setMessage(e.target.value)}
               onKeyDown={e => e.key === 'Enter' && sendMessage()}
               placeholder={isInternal ? 'Internal note (staff only)...' : 'Reply to student...'}
               className={`flex-1 border rounded-2xl px-4 py-2.5 text-sm focus:outline-none transition-all ${
                 isInternal
                   ? 'bg-amber-50 border-amber-200 text-gray-900 placeholder-amber-400 focus:border-amber-400'
                   : 'bg-gray-50 border-gray-200 text-gray-900 placeholder-gray-400 focus:border-violet-400'
-              }`}
-            />
-            <motion.button
-              whileTap={{ scale: 0.9 }}
-              onClick={sendMessage}
-              disabled={sending}
+              }`} />
+            <motion.button whileTap={{ scale: 0.9 }} onClick={sendMessage} disabled={sending}
               className={`w-10 h-10 rounded-2xl flex items-center justify-center shadow-sm ${
-                isInternal
-                  ? 'bg-gradient-to-br from-amber-400 to-orange-400'
-                  : 'bg-gradient-to-br from-violet-500 to-purple-400'
-              }`}
-            >
+                isInternal ? 'bg-gradient-to-br from-amber-400 to-orange-400' : 'bg-gradient-to-br from-violet-500 to-purple-400'
+              }`}>
               {sending
                 ? <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
                 : <Send size={15} className="text-white" />
@@ -397,23 +345,16 @@ export default function StaffTicketDetail() {
 
         {/* Quick Actions */}
         <div className="grid grid-cols-2 gap-3 pb-8">
-          {[
-            { label: 'Mark Resolved', icon: CheckCircle2, gradient: 'from-green-500 to-emerald-400', shadow: 'shadow-green-500/25', action: () => handleStatusChange('resolved') },
-            { label: 'Escalate', icon: AlertCircle, gradient: 'from-red-500 to-rose-400', shadow: 'shadow-red-500/25', action: () => handleStatusChange('in_progress') },
-          ].map(btn => {
-            const Icon = btn.icon
-            return (
-              <motion.button
-                key={btn.label}
-                whileTap={{ scale: 0.97 }}
-                onClick={btn.action}
-                className={`py-3.5 rounded-2xl font-semibold text-sm text-white bg-gradient-to-r ${btn.gradient} shadow-lg ${btn.shadow} flex items-center justify-center gap-2`}
-              >
-                <Icon size={15} />
-                {btn.label}
-              </motion.button>
-            )
-          })}
+          <motion.button whileTap={{ scale: 0.97 }} onClick={() => handleStatusChange('resolved')}
+            className="py-3.5 rounded-2xl font-semibold text-sm text-white bg-gradient-to-r from-green-500 to-emerald-400 shadow-lg flex items-center justify-center gap-2">
+            <CheckCircle2 size={15} />
+            Mark Resolved
+          </motion.button>
+          <motion.button whileTap={{ scale: 0.97 }} onClick={() => handleStatusChange('in_progress')}
+            className="py-3.5 rounded-2xl font-semibold text-sm text-white bg-gradient-to-r from-amber-500 to-orange-400 shadow-lg flex items-center justify-center gap-2">
+            <Loader2 size={15} />
+            In Progress
+          </motion.button>
         </div>
       </div>
     </div>

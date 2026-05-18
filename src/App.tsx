@@ -13,7 +13,6 @@ import TicketDetail from './pages/student/TicketDetail'
 import StaffQueue from './pages/staff/StaffQueue'
 import StaffTicketDetail from './pages/staff/StaffTicketDetail'
 import AdminDashboard from './pages/admin/AdminDashboard'
-import AdminFlagged from './pages/admin/AdminFlagged'
 import AdminEvents from './pages/admin/AdminEvents'
 import AdminUsers from './pages/admin/AdminUsers'
 
@@ -55,7 +54,6 @@ function AppRoutes() {
       </Route>
       <Route path="/admin" element={<ProtectedRoute allowedRoles={['admin']}><AdminLayout /></ProtectedRoute>}>
         <Route index element={<AdminDashboard />} />
-        <Route path="flagged" element={<AdminFlagged />} />
         <Route path="events" element={<AdminEvents />} />
         <Route path="users" element={<AdminUsers />} />
       </Route>
