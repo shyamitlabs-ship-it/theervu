@@ -4,8 +4,7 @@ import { useNavigate } from 'react-router-dom'
 import {
   TicketIcon, CheckCircle2, AlertTriangle,
   TrendingUp, TrendingDown, Calendar,
-  Wifi, Zap, BookOpen, Bus, UtensilsCrossed, Stethoscope,
-  Library, Bell, BarChart3, ArrowRight
+  Zap, Bell, BarChart3, ArrowRight
 } from 'lucide-react'
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
@@ -32,6 +31,14 @@ const PRIORITY_COLORS = {
   low: '#10B981',
 }
 
+const eventTypeColors: Record<string, string> = {
+  exam: 'bg-red-500',
+  internal: 'bg-orange-400',
+  event: 'bg-violet-500',
+  holiday: 'bg-green-500',
+  maintenance: 'bg-gray-400',
+}
+
 export default function AdminDashboard() {
   const navigate = useNavigate()
   const { user } = useAuth()
@@ -40,9 +47,29 @@ export default function AdminDashboard() {
   const [priorityStats, setPriorityStats] = useState<any[]>([])
   const [dailyStats, setDailyStats] = useState<any[]>([])
   const [hostelStats, setHostelStats] = useState<any[]>([])
+  const [events, setEvents] = useState<any[]>([])
   const [showProfile, setShowProfile] = useState(false)
 
-  useEffect(() => { loadStats() }, [])
+  useEffect(() => {
+    loadStats()
+    loadEvents()
+
+    // Realtime for events
+    const sub = supabase
+      .channel('admin-events')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'college_events' }, () => loadEvents())
+      .subscribe()
+
+    return () => { supabase.removeChannel(sub) }
+  }, [])
+
+  const loadEvents = async () => {
+    const { data } = await supabase
+      .from('college_events')
+      .select('*')
+      .order('start_date', { ascending: true })
+    if (data) setEvents(data)
+  }
 
   const loadStats = async () => {
     const { data: tickets } = await supabase
@@ -122,6 +149,11 @@ export default function AdminDashboard() {
     return null
   }
 
+  const isActiveEvent = (ev: any) => {
+    const now = new Date()
+    return new Date(ev.start_date) <= now && new Date(ev.end_date) >= now
+  }
+
   return (
     <div className="min-h-screen bg-[#f5f5f7]">
 
@@ -144,7 +176,6 @@ export default function AdminDashboard() {
           </div>
         </div>
 
-        {/* Nav */}
         <div className="max-w-3xl mx-auto px-5 pb-4 flex gap-2 overflow-x-auto">
           {[
             { label: 'Overview', route: '/admin', active: true },
@@ -295,7 +326,7 @@ export default function AdminDashboard() {
           )}
         </motion.div>
 
-        {/* College Calendar */}
+        {/* College Calendar — real data */}
         <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.4 }}
           className="bg-white rounded-3xl border border-gray-100 shadow-sm p-5 mb-8">
           <div className="flex items-center justify-between mb-4">
@@ -303,30 +334,60 @@ export default function AdminDashboard() {
               <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-violet-500 to-purple-400 flex items-center justify-center">
                 <Calendar size={15} className="text-white" />
               </div>
-              <p className="text-sm font-bold text-gray-900">College Calendar</p>
+              <div>
+                <p className="text-sm font-bold text-gray-900">College Calendar</p>
+                <p className="text-[10px] text-gray-400">{events.length} event{events.length !== 1 ? 's' : ''} · real-time</p>
+              </div>
             </div>
-            <button onClick={() => navigate('/admin/events')} className="text-xs text-blue-600 font-semibold flex items-center gap-1">
+            <button onClick={() => navigate('/admin/events')}
+              className="text-xs text-blue-600 font-semibold flex items-center gap-1">
               Manage <ArrowRight size={11} />
             </button>
           </div>
-          <div className="space-y-2">
-            {[
-              { title: 'End Semester Exam', date: 'May 15–22', multiplier: '2.0x', color: 'bg-red-500' },
-              { title: 'College Day', date: 'May 25', multiplier: '1.3x', color: 'bg-violet-500' },
-              { title: 'Summer Holiday', date: 'Jun 1–30', multiplier: '0.7x', color: 'bg-green-500' },
-            ].map((ev) => (
-              <div key={ev.title} className="flex items-center gap-3 p-3 bg-gray-50 rounded-2xl">
-                <div className={`w-2 h-8 ${ev.color} rounded-full flex-shrink-0`} />
-                <div className="flex-1">
-                  <p className="text-xs font-bold text-gray-800">{ev.title}</p>
-                  <p className="text-[10px] text-gray-400">{ev.date}</p>
-                </div>
-                <span className="text-[10px] font-bold text-gray-600 bg-gray-200 px-2 py-1 rounded-lg">
-                  {ev.multiplier} priority
-                </span>
-              </div>
-            ))}
-          </div>
+
+          {events.length === 0 ? (
+            <div className="text-center py-6">
+              <Calendar size={24} className="text-gray-300 mx-auto mb-2" />
+              <p className="text-xs text-gray-400">No events added yet</p>
+              <button onClick={() => navigate('/admin/events')}
+                className="text-xs text-blue-500 font-semibold mt-2">
+                Add your first event →
+              </button>
+            </div>
+          ) : (
+            <div className="space-y-2">
+              {events.map((ev: any) => {
+                const active = isActiveEvent(ev)
+                const colorClass = eventTypeColors[ev.type] || 'bg-blue-500'
+                const start = new Date(ev.start_date).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })
+                const end = new Date(ev.end_date).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })
+                const dateStr = start === end ? start : `${start} – ${end}`
+                const batches = (ev.affected_batches || ['All']).join(', ')
+
+                return (
+                  <div key={ev.id} className={`flex items-center gap-3 p-3 rounded-2xl transition-all ${
+                    active ? 'bg-blue-50 border border-blue-100' : 'bg-gray-50'
+                  }`}>
+                    <div className={`w-2 h-10 ${colorClass} rounded-full flex-shrink-0`} />
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2">
+                        <p className="text-xs font-bold text-gray-800 truncate">{ev.title}</p>
+                        {active && (
+                          <span className="text-[9px] font-bold bg-green-100 text-green-600 border border-green-200 px-1.5 py-0.5 rounded-full flex-shrink-0">
+                            ACTIVE
+                          </span>
+                        )}
+                      </div>
+                      <p className="text-[10px] text-gray-400">{dateStr} · {batches}</p>
+                    </div>
+                    <span className="text-[10px] font-bold text-gray-600 bg-gray-200 px-2 py-1 rounded-lg flex-shrink-0">
+                      {ev.priority_multiplier}× priority
+                    </span>
+                  </div>
+                )
+              })}
+            </div>
+          )}
         </motion.div>
       </div>
 
