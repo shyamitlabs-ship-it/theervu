@@ -13,14 +13,14 @@ export async function createTicket({
   categoryId: string
   location: string
 }) {
-  // Get hour for time context
   const hour = new Date().getHours()
   const timeOfDay = hour >= 22 || hour < 6 ? 'night'
     : hour < 12 ? 'morning'
     : hour < 17 ? 'afternoon' : 'evening'
 
-  // Get active events
   const today = new Date().toISOString().split('T')[0]
+
+  // Get active events
   const { data: events } = await supabase
     .from('college_events')
     .select('*')
@@ -34,10 +34,40 @@ export async function createTicket({
     .eq('id', categoryId)
     .single()
 
-  // Compute priority score
+  // Get student's batch for batch-aware event matching
+  const { data: studentProfile } = await supabase
+    .from('profiles')
+    .select('batch')
+    .eq('id', studentId)
+    .single()
+
+  const studentBatch = studentProfile?.batch
+    ? studentProfile.batch.replace(/[^a-zA-Z0-9]/g, '').toUpperCase()
+    : ''
+
+  // Find applicable event — batch aware
+  let eventMultiplier = 1.0
+  let activeEventContext = null
+
+  if (events && events.length > 0) {
+    for (const event of events) {
+      const batches: string[] = event.affected_batches || ['All']
+      const appliesToStudent = batches.includes('All') ||
+        batches.some((b: string) => {
+          const cleanBatch = b.replace(/[^a-zA-Z0-9]/g, '').toUpperCase()
+          return studentBatch.includes(cleanBatch) || cleanBatch.includes(studentBatch)
+        })
+
+      if (appliesToStudent && (event.priority_multiplier || 1.0) > eventMultiplier) {
+        eventMultiplier = event.priority_multiplier || 1.0
+        activeEventContext = event.title
+      }
+    }
+  }
+
+  // Base weight and multipliers
   const baseWeight = category?.default_priority_weight || 5
   const timeMultiplier = timeOfDay === 'night' ? 2.0 : timeOfDay === 'evening' ? 1.3 : 1.0
-  const eventMultiplier = events && events.length > 0 ? events[0].priority_multiplier : 1.0
   const locationMultiplier = location.toLowerCase().includes('hostel') && timeOfDay === 'night' ? 1.8 : 1.0
 
   let priorityScore = baseWeight * timeMultiplier * eventMultiplier * locationMultiplier
@@ -45,9 +75,9 @@ export async function createTicket({
   // Hard overrides
   const lowerDesc = description.toLowerCase()
   const lowerTitle = title.toLowerCase()
-  // Critical hard overrides
+
   const powerKeywords = ['no power', 'power cut', 'no electricity', 'blackout', 'lights out', 'power failure']
-  const medicalKeywords = ['medical emergency', 'accident', 'injured', 'unconscious', 'bleeding', 'heart', 'hospital']
+  const medicalKeywords = ['medical emergency', 'accident', 'injured', 'unconscious', 'bleeding', 'heart attack', 'hospital']
   const hasPowerIssue = powerKeywords.some(k => lowerDesc.includes(k) || lowerTitle.includes(k))
   const hasMedical = medicalKeywords.some(k => lowerDesc.includes(k) || lowerTitle.includes(k))
   const isHostel = location.toLowerCase().includes('hostel') || lowerDesc.includes('hostel') || lowerTitle.includes('hostel')
@@ -56,29 +86,21 @@ export async function createTicket({
   if (hasPowerIssue && isHostel) priorityScore = Math.max(priorityScore, 70)
   if (hasMedical) priorityScore = 100
 
-  // High priority keywords
-  const highKeywords = ['not working', 'broken', 'urgent', 'immediately', 'exam tomorrow', 'cannot access', 'blocked']
+  const highKeywords = ['not working', 'broken', 'urgent', 'immediately', 'exam tomorrow', 'cannot access', 'blocked', 'not opening']
   const hasHighKeyword = highKeywords.some(k => lowerDesc.includes(k) || lowerTitle.includes(k))
   if (hasHighKeyword) priorityScore = Math.max(priorityScore, 28)
 
-  // Priority label
   const priorityLabel = priorityScore >= 60 ? 'critical'
     : priorityScore >= 30 ? 'high'
     : priorityScore >= 12 ? 'medium' : 'low'
 
-  // SLA deadline
   const slaHours = category?.default_sla_hours || 24
   const slaDeadline = new Date(Date.now() + slaHours * 60 * 60 * 1000).toISOString()
 
-  // Active event context
-  const eventContext = events && events.length > 0 ? events[0].title : null
-
-  // Generate ticket number
   const timestamp = Date.now()
   const random = Math.floor(Math.random() * 9000 + 1000)
   const ticketNumber = `THR-${new Date().getFullYear()}-${random}-${timestamp.toString().slice(-4)}`
-  
-  // Insert ticket
+
   const { data, error } = await supabase.from('tickets').insert({
     ticket_number: ticketNumber,
     student_id: studentId,
@@ -90,7 +112,7 @@ export async function createTicket({
     priority_label: priorityLabel,
     sla_deadline: slaDeadline,
     time_of_day_at_creation: timeOfDay,
-    active_event_context: eventContext,
+    active_event_context: activeEventContext,
     status: 'open',
   }).select().single()
 
@@ -104,34 +126,35 @@ export async function getStudentTickets(studentId: string) {
     .select(`*, categories(name, icon)`)
     .eq('student_id', studentId)
     .order('created_at', { ascending: false })
-
   return { data, error }
 }
 
 export async function getStaffTickets() {
   const { data, error } = await supabase
     .from('tickets')
-    .select(`*, categories(name, icon), profiles!tickets_student_id_fkey(name, email, department, batch, hostel_block)`)
+    .select(`*, categories(name, icon), profiles!tickets_student_id_fkey(name, email, department, batch, hostel_block, roll_number)`)
     .in('status', ['open', 'in_progress', 'awaiting_student'])
     .order('priority_score', { ascending: false })
-
   return { data, error }
 }
 
 export async function updateTicketStatus(ticketId: string, status: string) {
+  const updates: any = { status, updated_at: new Date().toISOString() }
+  if (status === 'resolved') updates.resolved_at = new Date().toISOString()
+
   const { data, error } = await supabase
     .from('tickets')
-    .update({ status, updated_at: new Date().toISOString() })
+    .update(updates)
     .eq('id', ticketId)
     .select()
     .single()
-
   return { data, error }
 }
+
 export async function getTicketById(ticketId: string) {
   const { data, error } = await supabase
     .from('tickets')
-    .select(`*, categories(name, icon), profiles!tickets_student_id_fkey(name, email, department, batch, hostel_block)`)
+    .select(`*, categories(name, icon), profiles!tickets_student_id_fkey(name, email, department, batch, hostel_block, roll_number)`)
     .eq('id', ticketId)
     .single()
   return { data, error }
@@ -155,8 +178,8 @@ export async function addComment(ticketId: string, authorId: string, content: st
     .single()
   return { data, error }
 }
+
 export async function getSimilarTickets(title: string, description: string, categoryId: string) {
-  // Get resolved tickets from same category
   const { data, error } = await supabase
     .from('tickets')
     .select(`
@@ -170,7 +193,6 @@ export async function getSimilarTickets(title: string, description: string, cate
 
   if (error || !data || data.length === 0) return []
 
-  // Simple keyword matching — find tickets with similar words
   const keywords = [...title.toLowerCase().split(' '), ...description.toLowerCase().split(' ')]
     .filter(w => w.length > 3)
 
