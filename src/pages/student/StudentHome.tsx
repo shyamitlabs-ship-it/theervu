@@ -99,16 +99,30 @@ export default function StudentHome() {
   useEffect(() => {
     if (user) {
       loadTickets()
-      if (Notification.permission === 'default') {
-        setTimeout(() => requestNotificationPermission(user.id), 3000)
+      // Safe notification check — not all mobile browsers support Notification API
+      try {
+        if (
+          typeof window !== 'undefined' &&
+          'Notification' in window &&
+          Notification.permission === 'default'
+        ) {
+          setTimeout(() => requestNotificationPermission(user.id), 3000)
+        }
+      } catch (e) {
+        // Notification API not supported on this device
       }
     }
   }, [user])
 
   const loadTickets = async () => {
-    const { data } = await getStudentTickets(user!.id)
-    if (data) setTickets(data)
-    setLoading(false)
+    try {
+      const { data } = await getStudentTickets(user!.id)
+      if (data) setTickets(data)
+    } catch (e) {
+      console.error('Error loading tickets:', e)
+    } finally {
+      setLoading(false)
+    }
   }
 
   const openCount = tickets.filter(t => t.status === 'open').length
