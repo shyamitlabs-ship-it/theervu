@@ -77,14 +77,24 @@ export async function createTicket({
   const lowerTitle = title.toLowerCase()
 
   const powerKeywords = ['no power', 'power cut', 'no electricity', 'blackout', 'lights out', 'power failure']
-  const medicalKeywords = ['medical emergency', 'accident', 'injured', 'unconscious', 'bleeding', 'heart attack', 'hospital']
+  const medicalKeywords = [
+  'medical emergency', 'accident', 'injured', 'unconscious', 'bleeding',
+  'heart attack', 'hospital', 'fell', 'fallen', 'falling', 'fell down',
+  'fracture', 'broken bone', 'fainted', 'fainting', 'seizure', 'chest pain',
+  'cannot breathe', 'not breathing', 'head injury', 'stairs', 'collapsed',
+  'emergency', 'ambulance', 'serious injury', 'hurt badly', 'in pain'
+]
   const hasPowerIssue = powerKeywords.some(k => lowerDesc.includes(k) || lowerTitle.includes(k))
   const hasMedical = medicalKeywords.some(k => lowerDesc.includes(k) || lowerTitle.includes(k))
   const isHostel = location.toLowerCase().includes('hostel') || lowerDesc.includes('hostel') || lowerTitle.includes('hostel')
 
   if (hasPowerIssue && isHostel && timeOfDay === 'night') priorityScore = 100
   if (hasPowerIssue && isHostel) priorityScore = Math.max(priorityScore, 70)
-  if (hasMedical) priorityScore = 100
+if (hasMedical) { priorityScore = 100 }
+
+  // Also override if category is Medical regardless of keywords
+  const categoryName = category?.name?.toLowerCase() || ''
+  if (categoryName === 'medical') priorityScore = Math.max(priorityScore, 60)
 
   const highKeywords = ['not working', 'broken', 'urgent', 'immediately', 'exam tomorrow', 'cannot access', 'blocked', 'not opening']
   const hasHighKeyword = highKeywords.some(k => lowerDesc.includes(k) || lowerTitle.includes(k))
