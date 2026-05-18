@@ -1,5 +1,4 @@
 import { useState } from 'react'
-import { useNavigate } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
 import { GraduationCap, Headset, ShieldCheck, AlertCircle, Eye, EyeOff } from 'lucide-react'
 import { useAuth } from '../lib/AuthContext'
@@ -38,6 +37,32 @@ const years = ['1st Year', '2nd Year', '3rd Year', '4th Year']
 const batches = ['2022–2026', '2023–2027', '2024–2028', '2025–2029']
 const hostelOptions = ['Hostel (Boys)', 'Hostel (Girls)', 'Day Scholar']
 
+// Map batch year range to batch code prefix
+const batchCodeMap: Record<string, string> = {
+  '2022–2026': '22',
+  '2023–2027': '23',
+  '2024–2028': '24',
+  '2025–2029': '25',
+}
+
+// Map department to short code
+const deptCodeMap: Record<string, string> = {
+  'B.Tech (Information Technology)': 'BIT',
+  'B.E (Computer Science and Engineering)': 'BCE',
+  'B.E (Electronics and Communication Engineering)': 'BEC',
+  'B.E (Electrical and Electronics Engineering)': 'BEE',
+  'B.E (Mechanical Engineering)': 'BME',
+  'B.E (Civil Engineering)': 'BCE',
+  'B.Tech (Artificial Intelligence & Data Science)': 'BAD',
+  'B.Tech (Biotechnology)': 'BBT',
+  'B.Tech (Fashion Technology)': 'BFT',
+  'B.Tech (Textile Technology)': 'BTT',
+  'B.E (Aeronautical Engineering)': 'BAE',
+  'B.E (Automobile Engineering)': 'BAU',
+  'B.E (Electronics and Instrumentation Engineering)': 'BEI',
+  'B.E (Mechatronics Engineering)': 'BMT',
+}
+
 export default function LoginPage() {
   const [mode, setMode] = useState<'login' | 'signup'>('login')
   const [selected, setSelected] = useState('student')
@@ -59,6 +84,14 @@ export default function LoginPage() {
   const { signIn } = useAuth()
   const selectedRole = roles.find(r => r.id === selected)!
 
+  // Auto-generate batch code like 23BIT from batch year + department
+  const getBatchCode = () => {
+    if (selected !== 'student' || !batch || !department) return null
+    const yearPrefix = batchCodeMap[batch] || ''
+    const deptCode = deptCodeMap[department] || ''
+    return yearPrefix && deptCode ? `${yearPrefix}${deptCode}` : null
+  }
+
   const handleLogin = async () => {
     if (!email || !password) { setError('Please enter email and password'); return }
     setLoading(true); setError('')
@@ -71,6 +104,9 @@ export default function LoginPage() {
     if (password.length < 6) { setError('Password must be at least 6 characters'); return }
     setLoading(true); setError('')
 
+    const batchCode = getBatchCode()
+
+    // Step 1 — Create auth user with metadata
     const { data, error: signupError } = await supabase.auth.signUp({
       email,
       password,
@@ -78,10 +114,11 @@ export default function LoginPage() {
         data: {
           name,
           role: selected,
-          department,
-          batch: selected === 'student' ? batch : undefined,
-          hostel_block: selected === 'student' ? hostelBlock : undefined,
-          phone,
+          department: department || null,
+          batch: batchCode || (selected === 'student' ? batch : null),
+          hostel_block: selected === 'student' ? hostelBlock || null : null,
+          phone: phone || null,
+          roll_number: selected === 'student' ? rollNumber || null : null,
         }
       }
     })
@@ -93,27 +130,30 @@ export default function LoginPage() {
     }
 
     if (data.user) {
-      await supabase.from('profiles').upsert({
-        id: data.user.id,
-        email,
+      // Step 2 — Sign in immediately to get authenticated session
+      await supabase.auth.signInWithPassword({ email, password })
+
+      // Step 3 — Update profile with full details now that we're authenticated
+      const { error: updateError } = await supabase.from('profiles').update({
         name,
-        role: selected,
-        department,
-        batch: selected === 'student' ? batch : null,
-        hostel_block: selected === 'student' ? hostelBlock : null,
-        phone,
-        roll_number: selected === 'student' ? rollNumber : null,
-      })
+        department: department || null,
+        batch: batchCode || (selected === 'student' ? batch || null : null),
+        hostel_block: selected === 'student' ? hostelBlock || null : null,
+        phone: phone || null,
+        roll_number: selected === 'student' ? rollNumber || null : null,
+      }).eq('id', data.user.id)
+
+      if (updateError) console.error('Profile update error:', updateError)
     }
 
     setSuccess('Account created! Signing you in...')
-    setTimeout(async () => {
-      await signIn(email, password)
-    }, 1500)
+    setLoading(false)
   }
 
   const inputClass = "w-full bg-white/5 border border-white/10 rounded-2xl px-4 py-3 text-white placeholder-white/30 text-sm focus:outline-none focus:border-white/30 transition-all"
   const selectClass = "w-full bg-white/5 border border-white/10 rounded-2xl px-4 py-3 text-white text-sm focus:outline-none focus:border-white/30 transition-all"
+
+  const batchCode = getBatchCode()
 
   return (
     <div className="min-h-screen w-full flex items-center justify-center relative overflow-hidden bg-[#0a0a0a] py-8">
@@ -200,18 +240,14 @@ export default function LoginPage() {
 
           {/* Form */}
           <div className="space-y-3 mb-4">
-
-            {/* Signup fields */}
             <AnimatePresence>
               {mode === 'signup' && (
                 <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }}
                   exit={{ opacity: 0, height: 0 }} className="space-y-3 overflow-hidden">
 
-                  {/* Name — all roles */}
                   <input value={name} onChange={e => setName(e.target.value)}
                     placeholder="Full Name *" className={inputClass} />
 
-                  {/* Department — different list per role */}
                   <select value={department} onChange={e => setDepartment(e.target.value)}
                     className={selectClass} style={{ background: 'rgba(20,20,40,0.95)' }}>
                     <option value="">Select Department *</option>
@@ -220,7 +256,6 @@ export default function LoginPage() {
                     ))}
                   </select>
 
-                  {/* Student-only fields */}
                   {selected === 'student' && (
                     <>
                       <input value={rollNumber} onChange={e => setRollNumber(e.target.value)}
@@ -238,6 +273,17 @@ export default function LoginPage() {
                         {batches.map(b => <option key={b} value={b}>{b}</option>)}
                       </select>
 
+                      {/* Auto batch code preview */}
+                      {batchCode && (
+                        <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}
+                          className="flex items-center gap-2 bg-blue-500/10 border border-blue-500/20 rounded-2xl px-4 py-2.5">
+                          <div className="w-2 h-2 rounded-full bg-blue-400 animate-pulse" />
+                          <p className="text-blue-400 text-xs font-semibold">
+                            Batch code: <span className="font-bold">{batchCode}</span> — used for event matching
+                          </p>
+                        </motion.div>
+                      )}
+
                       <select value={hostelBlock} onChange={e => setHostelBlock(e.target.value)}
                         className={selectClass} style={{ background: 'rgba(20,20,40,0.95)' }}>
                         <option value="">Hostel / Day Scholar</option>
@@ -246,14 +292,12 @@ export default function LoginPage() {
                     </>
                   )}
 
-                  {/* Phone — all roles */}
                   <input value={phone} onChange={e => setPhone(e.target.value)}
                     placeholder="Phone Number" className={inputClass} type="tel" />
                 </motion.div>
               )}
             </AnimatePresence>
 
-            {/* Email + Password — always visible */}
             <input type="email" placeholder="Email address *" value={email}
               onChange={e => setEmail(e.target.value)}
               onKeyDown={e => e.key === 'Enter' && (mode === 'login' ? handleLogin() : handleSignup())}
@@ -271,7 +315,6 @@ export default function LoginPage() {
             </div>
           </div>
 
-          {/* Submit */}
           <motion.button whileTap={{ scale: 0.98 }} whileHover={{ scale: 1.01 }}
             onClick={mode === 'login' ? handleLogin : handleSignup}
             disabled={loading}
